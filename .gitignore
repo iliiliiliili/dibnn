@@ -1,0 +1,23 @@
+# Virtual environment files.
+bin/
+lib/
+lib64/
+share/
+pyvenv.cfg
+
+# IDE files.
+.vscode
+
+__pycache__
+*.png
+*.egg-info
+*.txt
+*.csv
+tex/*
+
+*.sh
+!run_example.sh
+!install.sh
+screenlog.*
+results
+single_runs
