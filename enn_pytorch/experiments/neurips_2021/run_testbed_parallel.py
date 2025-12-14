@@ -24,105 +24,192 @@ from enn_pytorch.experiments.neurips_2021 import load
 from enn_pytorch.experiments.neurips_2021.random import split_seed
 import os
 from multiprocessing import Pool
+import random
 
 
-def single_run(ind, dr, ns, seed, agent_id_start, agent_id_end, agent_name, experiment_group, device):
-    
+def single_run(ind, dr, ns, seed, agent_id, agent_seed, agent_name, experiment_group, device):
+
     dr = float(dr)
     ns = float(ns)
-    
+
     # Load the appropriate testbed problem
     problem = load.regression_load(
         input_dim=ind,
         data_ratio=dr,
         seed=seed,
         noise_std=ns,
+        # device=device,
     )
 
-    all_results = []
+    # print(
+    #     "input_dim",
+    #     ind,
+    #     "data_ratio",
+    #     dr,
+    #     "noise_std",
+    #     ns,
+    #     "agent_id", agent_id,
+    # )
 
-    sweep = agent_factories.load_agent_config_sweep(agent_name)
-    sweep = (
-        sweep[agent_id_start :]
-        if agent_id_end == -1
-        else sweep[agent_id_start : agent_id_end]
+    agent_config = agent_factories.load_agent_config(agent_id, agent_name)
+
+    # Form the appropriate agent for training
+    agent = agents.VanillaEnnAgent(agent_config.config_ctor())
+
+    # Train
+    enn_sampler = agent(
+        problem.train_data, agent_seed, problem.prior_knowledge, device=device, logging="none"
     )
 
-    agent_seeds = split_seed(seed, len(sweep))
+    # Evaluate the quality of the ENN sampler after training
+    kl_quality = problem.evaluate_quality(enn_sampler, device=device)
 
-    for i, (agent_config, agent_seed) in enumerate(zip(sweep, agent_seeds)):
+    print("#", end="")
 
-        agent_id = agent_id_start + i
+    # print(
+    #     f"kl_estimate={kl_quality.kl_estimate}"
+    #     + " mean_error="
+    #     + str(kl_quality.extra["mean_error"])
+    #     + " "
+    #     + "std_error="
+    #     + str(kl_quality.extra["std_error"])
+    # )
 
-        print(
-            "input_dim",
-            ind,
-            "data_ratio",
-            dr,
-            "noise_std",
-            ns,
-        )
-        print("agent_id", agent_id, "of", len(sweep))
+    result_folder = (
+        "results/results_"
+        + experiment_group
+        + ("_" if len(experiment_group) > 0 else "")
+        + agent_name
+        + "_id"
+        + str(ind)
+        + "dr"
+        + str(dr)
+        + "ns"
+        + str(ns)
+    )
 
-        # Form the appropriate agent for training
-        agent = agents.VanillaEnnAgent(agent_config.config_ctor())
+    os.makedirs(result_folder, exist_ok=True)
 
-        # Train
-        enn_sampler = agent(
-            problem.train_data, agent_seed, problem.prior_knowledge, device=device
-        )
+    with open(
+        result_folder
+        + "/agentid"
+        + str(agent_id)
+        + ".txt",
+        "w",
+    ) as f:
 
-        # Evaluate the quality of the ENN sampler after training
-        kl_quality = problem.evaluate_quality(enn_sampler)
-        print(
-            f"kl_estimate={kl_quality.kl_estimate}"
-            + " mean_error="
+        f.write(
+            str(agent_id)
+            + " "
+            + str(kl_quality.kl_estimate)
+            + " "
+            + "mean_error="
             + str(kl_quality.extra["mean_error"])
             + " "
             + "std_error="
             + str(kl_quality.extra["std_error"])
-        )
-        all_results.append(kl_quality)
-
-        with open(
-            "results/results_"
-            + experiment_group
-            + ("_" if len(experiment_group) > 0 else "")
-            + agent_name
-            + "_id"
-            + str(ind)
-            + "dr"
-            + str(dr)
-            + "ns"
-            + str(ns)
-            + ".txt",
-            "a",
-        ) as f:
-
-            f.write(
-                str(agent_id)
-                + " "
-                + str(kl_quality.kl_estimate)
-                + " "
-                + "mean_error="
-                + str(kl_quality.extra["mean_error"])
-                + " "
-                + "std_error="
-                + str(kl_quality.extra["std_error"])
-                + " "
-                + " ".join(
-                    [
-                        str(k) + "=" + str(v)
-                        for (
-                            k,
-                            v,
-                        ) in agent_config.settings.items()
-                    ]
-                )
-                + "\n"
+            + " "
+            + " ".join(
+                [
+                    str(k) + "=" + str(v)
+                    for (
+                        k,
+                        v,
+                    ) in agent_config.settings.items()
+                ]
             )
+            + "\n"
+        )
 
-    print(all_results)
+
+def run_experiments(experiments, devices, processes_per_device, debug=False):
+    print(f"Starting {len(experiments)} experiments")
+    
+    if not isinstance(devices, list):
+        devices = [f"cuda:{d}" for d in range(devices)]
+
+    experiments_per_device = [0 for _ in devices]
+
+    experiments_to_assign = len(experiments)
+
+    for i in range(len(experiments_per_device)):
+        experiments_per_device[i] = min(experiments_to_assign, processes_per_device)
+        experiments_to_assign -= experiments_per_device[i]
+
+    while experiments_to_assign > 0:
+        for i in range(len(experiments_per_device)):
+            experiments_per_device[i] += 1
+            experiments_to_assign -= 1
+
+            if experiments_to_assign <= 0:
+                break
+
+    pools = [Pool(processes_per_device) for _ in devices]
+
+    for exp_count, device, pool in zip(experiments_per_device, devices, pools):
+
+        for i in range(exp_count):
+            experiment_args = experiments.pop(0)
+
+            if debug:
+                print("DEBUG")
+                print("DEBUG")
+                print("DEBUG")
+                single_run(
+                    *experiment_args,
+                    device=device,
+                )
+            else:
+                # pool.apply(
+                pool.apply_async(
+                    single_run,
+                    args=(*experiment_args,),
+                    kwds={"device": device},
+                    error_callback=lambda e, args=experiment_args: open(
+                        "./errors.log", "a"
+                    ).write(
+                        f"Error: {str(e)}\nArgs: {args}\n"
+                    ),
+                )
+
+    for pool in pools:
+        pool.close()
+        pool.join()
+
+    print("Done")
+
+
+def combine_results(experiment_group: str, agent_name: str, input_dims: list, data_ratios: list, noise_stds: list, agent_id_start: int, agent_id_end: int):
+    """Combine results from multiple runs into single files."""
+    for ind in input_dims:
+        for dr in data_ratios:
+            for ns in noise_stds:
+                result_folder = (
+                    "results/results_"
+                    + experiment_group
+                    + ("_" if len(experiment_group) > 0 else "")
+                    + agent_name
+                    + "_id"
+                    + str(ind)
+                    + "dr"
+                    + str(dr)
+                    + "ns"
+                    + str(ns)
+                )
+
+                combined_filepath = result_folder + ".txt"
+
+                with open(combined_filepath, "w") as combined_file:
+                    for agent_id in range(agent_id_start, agent_id_end + 1):
+                        agent_filepath = (
+                            result_folder
+                            + "/agentid"
+                            + str(agent_id)
+                            + ".txt"
+                        )
+                        if os.path.exists(agent_filepath):
+                            with open(agent_filepath, "r") as agent_file:
+                                combined_file.write(agent_file.read())
 
 
 def main(
@@ -134,8 +221,9 @@ def main(
     agent_id_end=-1,
     agent_name="all",
     experiment_group="",
-    device="cuda:0",
-    processes=30,
+    devices=2,
+    processes_per_device=6,
+    debug=False,
 ):
     """Run testbed sweep.
 
@@ -159,26 +247,70 @@ def main(
     if isinstance(noise_std, float) or isinstance(noise_std, int):
         noise_std = [float(noise_std)]
 
-    pool = Pool(processes)
+    experiments = []
 
     for ind in input_dim:
         for dr in data_ratio:
             for ns in noise_std:
-                print(
-                    "input_dim",
-                    input_dim,
-                    "data_ratio",
-                    data_ratio,
-                    "noise_std",
-                    noise_std,
+
+                problem = load.regression_load(
+                    input_dim=ind,
+                    data_ratio=dr,
+                    seed=seed,
+                    noise_std=ns,
                 )
-                pool.apply_async(
-                    single_run,
-                    args=(ind, dr, ns, seed, agent_id_start, agent_id_end, agent_name, experiment_group, device),
+
+                print("Created problem for ind", ind, "dr", dr, "ns", ns)
+
+                sweep = agent_factories.load_agent_config_sweep(agent_name)
+                sweep = (
+                    sweep[agent_id_start :]
+                    if agent_id_end == -1
+                    else sweep[agent_id_start : agent_id_end]
                 )
-    pool.close()
-    pool.join()
-    print("Finished all runs")                
+
+                agent_seeds = split_seed(seed, len(sweep))
+
+                for i, (agent_config, agent_seed) in enumerate(zip(sweep, agent_seeds)):
+
+                    agent_id = agent_id_start + i
+
+                    arguments = (
+                        ind,
+                        dr,
+                        ns,
+                        seed,
+                        agent_id,
+                        agent_seed,
+                        agent_name,
+                        experiment_group,
+                    )
+
+                    experiments.append(arguments)
+
+
+    random.shuffle(experiments)
+
+    run_experiments(experiments, devices, processes_per_device=processes_per_device, debug=debug)
+    print("Finished all runs")
+
+    max_agent_id = (
+        agent_id_end
+        if agent_id_end != -1
+        else len(agent_factories.load_agent_config_sweep(agent_name))
+    )
+
+    combine_results(
+        experiment_group,
+        agent_name,
+        input_dim,
+        data_ratio,
+        noise_std,
+        agent_id_start,
+        max_agent_id,
+    )
+
+    print("Combined results")
 
 
 if __name__ == "__main__":

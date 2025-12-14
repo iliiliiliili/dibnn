@@ -278,7 +278,7 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
 
 def load_agent_config(agent_id: int, agent: str = "all") -> agents.VanillaEnnConfig:
     sweep = make_agent_sweep(agent)
-    return sweep[agent_id].config_ctor()
+    return sweep[agent_id]
 
 
 def load_agent_config_sweep(agent: str = "all"):

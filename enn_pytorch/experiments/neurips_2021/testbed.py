@@ -278,7 +278,7 @@ class TestbedGPRegression(TestbedProblem):
     @staticmethod
     def load(path: str):
         
-        data = torch.load(path)
+        data = torch.load(path, weights_only=True)
         data_sampler = GPRegression.restore(
             tau=1,
             input_dim=data["x_train"].shape[1],

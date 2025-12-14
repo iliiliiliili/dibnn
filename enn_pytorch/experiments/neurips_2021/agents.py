@@ -96,7 +96,8 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         data: testbed_base.Data, 
         seed: int,
         prior: Optional[testbed_base.PriorKnowledge] = None,
-        device: str = 'cuda:0'
+        device: str = 'cuda:0',
+        logging: str = "default",
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         # Create the ENN
@@ -140,7 +141,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
             loss.backward()
             optimizer.step()
             
-            if (steps) % logging_freq(self.config.training_steps, self.config.train_log_freq) == 0:
+            if ((steps) % logging_freq(self.config.training_steps, self.config.train_log_freq) == 0) and (logging != "none"):
                 print(f"Step {steps}/{self.config.training_steps}, Loss: {loss.item():.4f}")
 
             steps += max(1, batch.x.shape[0] // 100)
