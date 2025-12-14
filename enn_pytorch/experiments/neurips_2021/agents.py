@@ -43,7 +43,7 @@ class VanillaEnnConfig:
     enn_ctor: enn_losses.EnnCtor
     loss_ctor: enn_losses.LossCtor = enn_losses.default_enn_loss()
     optimizer_ctor: Callable = None  # Function returning torch optimizer
-    training_steps: Optional[int] = 100 * 1000
+    training_steps: Optional[int] = 1000
     batch_size: Optional[int] = None
     eval_batch_size: Optional[int] = None
     logger: Optional[object] = None
@@ -59,7 +59,7 @@ class VanillaEnnConfig:
         if self.optimizer_ctor is None:
             self.optimizer_ctor = lambda params: optim.Adam(params, lr=1e-3)
         if self.training_steps is None:
-            self.training_steps = 100 * 1000
+            self.training_steps = 1000
 
 
 def extract_enn_sampler(
@@ -140,10 +140,10 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
             loss.backward()
             optimizer.step()
             
-            if (steps // batch.x.shape[0] + 1) % (logging_freq(self.config.training_steps, self.config.train_log_freq) // batch.x.shape[0]) == 0:
+            if (steps) % logging_freq(self.config.training_steps, self.config.train_log_freq) == 0:
                 print(f"Step {steps}/{self.config.training_steps}, Loss: {loss.item():.4f}")
 
-            steps += batch.x.shape[0]
+            steps += max(1, batch.x.shape[0] // 100)
         
         model.eval()
         return extract_enn_sampler(model, enn)
