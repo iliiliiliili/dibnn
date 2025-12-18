@@ -15,7 +15,7 @@ from plotnine import (
     ylab,
     xlab,
     scale_color_discrete,
-    labeller
+    labeller,
 )
 from plotnine.data import economics
 from pandas import Categorical, DataFrame, read_csv
@@ -24,18 +24,18 @@ from plotnine.scales.scale_xy import scale_x_discrete
 from plotnine.guides import guide_axis, guide_legend, guide
 from glob import glob
 import re
+from fire import Fire
 
-limit_std = 100
+limit_std = 1000
 
 tex_template_file = "tools/tex_table_template.tex"
-use_ranked_layer_enbsemble = True
 
 with open(tex_template_file, "r") as f:
     tex_template = f.read()
 
 # files = glob("results_vnn_selected*")
 # files = glob("results/results_*")
-files = glob("results/results_*layer*")
+# files = glob("results/results_*layer*")
 # files = glob("results_all_old*") + glob("results_vnn_selected*")
 # files = glob("results_mserr*") + glob("results_lrelu*")
 # files = glob("results/results_best_selected_val_*") + glob("results/results_mserr*")
@@ -262,7 +262,7 @@ summary_select_agent_params = {
             "activation": ["relu", "tanh"],
             # "activation_mode": ["mean"],
             # "global_std_mode": ["multiply"],
-            "activation_mode": ["none"],
+            "activation_mode": ["mean"],
             "global_std_mode": ["multiply"],
             "num_layers": [3],
             "hidden_size": [100],
@@ -353,14 +353,14 @@ summary_select_agent_params = {
 }
 
 
-def add_true_layer_ensemble_einsum_cor_summary_params():
+def add_true_layer_ensemble_einsum_cor_summary_params(use_ranked):
 
-    if use_ranked_layer_enbsemble:
+    if use_ranked:
         all_nens_samples = [
-            (2, [*range(2, 2 ** 3)]),
-            (3, [*range(2, 3 ** 3)]),
-            (5, [*range(2, 5 ** 3)]),
-            (6, [*range(2, 6 ** 3)]),
+            (2, [*range(2, 2**3)]),
+            (3, [*range(2, 3**3)]),
+            (5, [*range(2, 5**3)]),
+            (6, [*range(2, 6**3)]),
             # (8, [*range(2, 8 ** 3)]),
             # (10, [*range(2, 10 ** 3)]),
         ]
@@ -377,11 +377,11 @@ def add_true_layer_ensemble_einsum_cor_summary_params():
     for num_ensemble, inference_samples in all_nens_samples:
         for samples in inference_samples:
 
-            if use_ranked_layer_enbsemble:
+            if use_ranked:
                 indexer = samples
             else:
                 indexer = (
-                    num_ensemble ** 3 if samples == "full" else samples * num_ensemble
+                    num_ensemble**3 if samples == "full" else samples * num_ensemble
                 )
 
             params = {
@@ -398,6 +398,136 @@ def add_true_layer_ensemble_einsum_cor_summary_params():
                 "indexer": [indexer],
             }
             summary_select_agent_params["true_layer_ensemble_einsum_cor"].append(params)
+
+
+def make_vnn_ranked_params(num_samples, use_ranked):
+
+    if use_ranked:
+
+        summary_select_agent_params["vnn"] = []
+
+        all_nens_samples = [
+            (num_samples, [*range(2, num_samples)]),
+        ]
+
+        for max_num_samples, inference_samples in all_nens_samples:
+            for samples in inference_samples:
+
+                indexer = samples
+
+                params = {
+                    "agent_suffix": "_"
+                    + str(max_num_samples)
+                    + "s"
+                    + str(indexer)
+                    + ("f" if samples == "full" else ""),
+                    "activation": ["relu", "tanh"],
+                    "num_layers": [3],
+                    "hidden_size": [50],
+                    "num_index_samples": [100],
+                    "num_batches": ["1000"],
+                    "max_num_samples": [max_num_samples],
+                    "indexer": [indexer],
+                }
+
+                summary_select_agent_params["vnn"].append(params)
+
+
+def make_dropout_ranked_params(num_samples, use_ranked):
+
+    if use_ranked:
+
+        summary_select_agent_params["dropout"] = []
+
+        all_nens_samples = [
+            (num_samples, [*range(2, num_samples)]),
+        ]
+
+        for max_num_samples, inference_samples in all_nens_samples:
+            for samples in inference_samples:
+
+                indexer = samples
+
+                params = {
+                    "agent_suffix": "_"
+                    + str(max_num_samples)
+                    + "s"
+                    + str(indexer)
+                    + ("f" if samples == "full" else ""),
+                    "dropout_rate": [0.05],
+                    "regularization_scale": [1e-6],
+                    "num_layers": [2],
+                    "hidden_size": [50],
+                    "max_num_samples": [max_num_samples],
+                    "indexer": [indexer],
+                }
+
+                summary_select_agent_params["dropout"].append(params)
+
+
+def make_bbb_ranked_params(num_samples, use_ranked):
+
+    if use_ranked:
+
+        summary_select_agent_params["bbb"] = []
+
+        all_nens_samples = [
+            (num_samples, [*range(2, num_samples)]),
+        ]
+
+        for max_num_samples, inference_samples in all_nens_samples:
+            for samples in inference_samples:
+
+                indexer = samples
+
+                params = {
+                    "agent_suffix": "_"
+                    + str(max_num_samples)
+                    + "s"
+                    + str(indexer)
+                    + ("f" if samples == "full" else ""),
+                    "sigma_0": [1e2],
+                    "learning_rate": [1e-3],
+                    "num_layers": [2],
+                    "hidden_size": [50],
+                    "max_num_samples": [max_num_samples],
+                    "indexer": [indexer],
+                }
+
+                summary_select_agent_params["bbb"].append(params)
+
+
+def make_hypermodel_ranked_params(num_samples, use_ranked):
+
+    if use_ranked:
+
+        summary_select_agent_params["hypermodel"] = []
+
+        all_nens_samples = [
+            (num_samples, [*range(2, num_samples)]),
+        ]
+
+        for max_num_samples, inference_samples in all_nens_samples:
+            for samples in inference_samples:
+
+                indexer = samples
+
+                params = {
+                    "agent_suffix": "_"
+                    + str(max_num_samples)
+                    + "s"
+                    + str(indexer)
+                    + ("f" if samples == "full" else ""),
+                    "index_dim": [20],
+                    "noise_scale": [1.0],
+                    "prior_scale": [5.0],
+                    "num_layers": [2],
+                    "hidden_size": [50],
+                    "max_num_samples": [max_num_samples],
+                    "indexer": [indexer],
+                }
+
+                summary_select_agent_params["hypermodel"].append(params)
 
 
 def add_subsample_ensemble_summary_params():
@@ -424,12 +554,12 @@ def add_subsample_ensemble_summary_params():
             summary_select_agent_params["subsample_ensemble"].append(params)
 
 
-add_true_layer_ensemble_einsum_cor_summary_params()
+add_true_layer_ensemble_einsum_cor_summary_params(False)
 add_subsample_ensemble_summary_params()
 
 summary_input_dims = [
     # [1],
-    [10],
+    [10, 100],
     # [100],
     # [1000],
     # [10, 100],
@@ -657,7 +787,9 @@ def plot_all_single_frames(files):
                 "enn_plot_"
                 + agent
                 + "_"
-                + file.replace(".txt", "").replace("results/", "").replace("results1/", ""),
+                + file.replace(".txt", "")
+                .replace("results/", "")
+                .replace("results1/", ""),
             )
 
 
@@ -683,7 +815,14 @@ def plot_all_total_frames(files):
 def parse_enn_experiment_parameters(file):
 
     param_string = file.split("_")[-1]
-    input_dim, data_ratio, noise_std = re.findall(r"\d+(?:\.\d+|\d*)", param_string)
+    params = re.findall(r"\d+(?:\.\d+|\d*)", param_string)
+
+    input_dim, data_ratio, noise_std = params[:3]
+
+    max_num_samples = None
+
+    if len(params) > 3:
+        max_num_samples = int(params[3])
 
     input_dim = int(input_dim)
     data_ratio = float(data_ratio)
@@ -693,6 +832,7 @@ def parse_enn_experiment_parameters(file):
         "input_dim": input_dim,
         "data_ratio": data_ratio,
         "noise_std": noise_std,
+        "max_num_samples": max_num_samples,
     }
 
 
@@ -709,7 +849,7 @@ def plot_summary_vnn(
         experiment_params = parse_experiment_parameters(file)
 
         if experiment_params["input_dim"] not in allowed_input_dims:
-            print("scipping file", file, "due to input dim filter")
+            print("Skipping file", file, "due to input dim filter")
             continue
 
         for agent in agent_frames.keys():
@@ -872,7 +1012,9 @@ def plot_summary(
         scale_y_continuous(trans="log10")
         + geom_point(aes(colour="agent"), size=4, stroke=0.2)
         + geom_errorbar(
-            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8, size=1.5,
+            aes(colour="agent", ymin="mean-std", ymax="mean+std"),
+            width=0.8,
+            size=1.5,
         )
         + theme(axis_title=element_text(size=15), axis_text=element_text(size=4))
         + scale_color_discrete(guide=False)
@@ -967,7 +1109,11 @@ def plot_ensemble_summary(
             )
 
             data["agent_full"].append((agent + agent_suffix).replace("_", "\n"))
-            data["agent"].append(agent.replace("subsample_ensemble", "Deep Ensembles").replace("true_layer_ensemble_einsum_cor", "Layer Ensembles"))
+            data["agent"].append(
+                agent.replace("subsample_ensemble", "Deep Ensembles").replace(
+                    "true_layer_ensemble_einsum_cor", "Layer Ensembles"
+                )
+            )
             data["mean"].append(mean)
             data["std"].append(min(limit_std, std))
             data["num_ensemble"].append(int(frames[0]["num_ensemble"]))
@@ -979,14 +1125,24 @@ def plot_ensemble_summary(
         + aes(x="indexer", y="mean")
         + geom_hline(yintercept=1)
         # + facet_grid("num_ensemble ~ agent", space="free", scales="free")
-        + facet_wrap(["num_ensemble"], nrow=2, labeller=labeller(cols=lambda x: str(x) + " ensembles"))
+        + facet_wrap(
+            ["num_ensemble"],
+            nrow=2,
+            labeller=labeller(cols=lambda x: str(x) + " ensembles"),
+        )
         + scale_y_continuous(trans="log10")
         + scale_x_continuous(trans="log10")
         + geom_point(aes(colour="agent"), size=2, stroke=0.1)
         + geom_errorbar(
-            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.3, size=0.9,
+            aes(colour="agent", ymin="mean-std", ymax="mean+std"),
+            width=0.3,
+            size=0.9,
         )
-        + theme(axis_title=element_text(size=17), axis_text=element_text(size=10), figure_size=(6, 4))
+        + theme(
+            axis_title=element_text(size=17),
+            axis_text=element_text(size=10),
+            figure_size=(6, 4),
+        )
         + scale_color_discrete(guide=False)
         # + scale_x_discrete(guide=guide_legend())
         + ylab("Mean KL")
@@ -1014,17 +1170,32 @@ def plot_ranked_ensemble_summary(
     files,
     allowed_input_dims,
     parse_experiment_parameters=parse_enn_experiment_parameters,
+    allowed_max_num_samples=None,
+    agent_name=None,
 ):
 
     all_agent_frames = {}
+
+    max_num_samples = None
 
     for file in files:
         agent_frames = read_data(file)
         experiment_params = parse_experiment_parameters(file)
 
         if experiment_params["input_dim"] not in allowed_input_dims:
-            print("scipping file", file, "due to input dim filter")
+            print("Skipping file", file, "due to input dim filter")
             continue
+
+        if (allowed_max_num_samples is not None) and (
+            experiment_params["max_num_samples"] not in allowed_max_num_samples
+        ):
+            print("Skipping file", file, "due to allowed_max_num_samples filter")
+            continue
+
+        print("Frame", {k: len(v) for k, v in agent_frames.items()}, "from file", file)
+
+        if experiment_params["max_num_samples"] is not None:
+            max_num_samples = experiment_params["max_num_samples"]
 
         for agent in agent_frames.keys():
 
@@ -1068,6 +1239,15 @@ def plot_ranked_ensemble_summary(
                     agent_suffix = value
                     continue
 
+                if key == "max_num_samples":
+                    if max_num_samples is None:
+                        raise ValueError(
+                            "max_num_samples is not set in the experiment parameters"
+                        )
+                    if value[0] != max_num_samples:
+                        raise ValueError("Empty frame after filtering")
+                    continue
+
                 old_frames = frames
                 frames = [f[f[key].isin(value)] for f in frames]
                 if len(frames[0]) <= 0:
@@ -1084,7 +1264,11 @@ def plot_ranked_ensemble_summary(
             data["agent"].append(agent)
             data["mean"].append(mean)
             data["std"].append(min(limit_std, std))
-            data["num_ensemble"].append(int(frames[0]["num_ensemble"]))
+            data["num_ensemble"].append(
+                max_num_samples
+                if max_num_samples is not None
+                else int(frames[0]["num_ensemble"])
+            )
             data["indexer"].append(int(frames[0]["indexer"]))
 
     frame = DataFrame(data)
@@ -1094,7 +1278,15 @@ def plot_ranked_ensemble_summary(
         + aes(x="indexer", y="mean")
         + geom_hline(yintercept=1)
         # + facet_grid("num_ensemble ~ agent", space="free", scales="free")
-        + facet_wrap(["num_ensemble"], ncol=3, labeller=labeller(cols=lambda x: str(x) + " ensembles"))
+        + facet_wrap(
+            ["num_ensemble"],
+            ncol=3,
+            labeller=labeller(
+                cols=lambda x: ("" if agent_name is None else f"{agent_name} with ")
+                + str(x)
+                + " samples"
+            ),
+        )
         + scale_y_continuous(trans="log10")
         + scale_x_continuous(trans="log10")
         + geom_point(aes(colour="agent"), size=3, stroke=0.1)
@@ -1103,27 +1295,36 @@ def plot_ranked_ensemble_summary(
             width=0.07,
             size=0.9,
         )
-        + theme(axis_title=element_text(size=15), axis_text=element_text(size=8), figure_size=(12, 4))
+        + theme(
+            axis_title=element_text(size=15),
+            axis_text=element_text(size=8),
+            figure_size=(12, 4),
+        )
         + scale_color_discrete(guide=False)
         # + scale_x_discrete(guide=guide_legend())
         + ylab("Mean KL")
         + xlab("Number of samples")
     )
-    plot.save(
-        "plots/summary_ranked_ensemble_enn_plot_id"
+
+    name = (
+        f"{'' if agent_name is None else agent_name + '_'}summary_ranked_ensemble_enn_plot_id"
         + "_".join([str(a) for a in allowed_input_dims])
-        + ".png",
+        + (
+            ""
+            if allowed_max_num_samples is None
+            else "_mns" + "_".join([str(a) for a in allowed_max_num_samples])
+        )
+    )
+
+    plot.save(
+        "plots/" + name + ".png",
         dpi=600,
     )
-    frame.to_csv(
-        "plots/summary_ranked_ensemble_enn_id"
-        + "_".join([str(a) for a in allowed_input_dims])
-        + ".csv"
-    )
+    frame.to_csv("plots/" + name + ".csv")
     create_tex_table(
         frame,
         "all",
-        "summary_ranked_ensemble_enn_plot_id" + "_".join([str(a) for a in allowed_input_dims]),
+        name,
     )
 
 
@@ -1159,7 +1360,10 @@ def plot_all_hyperexperiment_frames(
 
             all_experiment_agent_frames[key][agent].append(frame)
 
-    for (experiment_param, all_agent_frames,) in all_experiment_agent_frames.items():
+    for (
+        experiment_param,
+        all_agent_frames,
+    ) in all_experiment_agent_frames.items():
         for agent, frames in all_agent_frames.items():
             if len(frames) > 0:
                 plot_multiple_frames(
@@ -1169,67 +1373,12 @@ def plot_all_hyperexperiment_frames(
                 )
 
 
-def plot_optimized_layer_ensemble_speed():
-
-    frame = DataFrame(
-        {
-            "Ensembles": [2, 3, 4, 5, 6, 7, 8, 9, 10,],
-            "Speed Up": [
-                196.02435110737994 / 111.8295512448305,
-                57.80796495367296 / 32.03804974678484,
-                24.843940387464368 / 5.64624682777498,
-                16.562746831583034 / 1.5746171174634735,
-                9.675929083702409 / 0.6817255399724734,
-                5.729144740571466 / 0.3516358885652403,
-                3.590836155147295 / 0.20132821390009117,
-                2.3235564106985414 / 0.12423794040411039,
-                1.466085111750885 / 0.08107119449007497,
-            ],
-            "Memory Save": [
-                (1234 - 954) / (1162 - 954),
-                (1352 - 976) / (1252 - 976),
-                (1516 - 998) / (1342 - 998),
-                (1762 - 1020) / (1434 - 1020),
-                (2140 - 1044) / (1524 - 1044),
-                (2702 - 1066) / (1614 - 1066),
-                (3518 - 1088) / (1706 - 1088),
-                (4664 - 1110) / (1798 - 1110),
-                (6226 - 1132) / (1890 - 1132),
-            ],
-        }
-    )
-
-    def plot_frame(frame, output_file_name):
-
-        plot1 = (
-            ggplot(frame)
-            + aes(x="Ensembles", y="Speed Up")
-            + geom_point(aes(), size=4, stroke=0.1)
-            + geom_line(size=1)
-            + theme(axis_title=element_text(size=20), axis_text=element_text(size=16))
-        )
-
-        plot1.save("plots/" + output_file_name + "_speed.png", dpi=600)
-
-        plot2 = (
-            ggplot(frame)
-            + aes(x="Ensembles", y="Memory Save")
-            + geom_point(aes(), size=4, stroke=0.1)
-            + geom_line(size=1)
-            + theme(axis_title=element_text(size=20), axis_text=element_text(size=16))
-        )
-
-        plot2.save("plots/" + output_file_name + "_memory.png", dpi=600)
-
-    plot_frame(frame, "optimized_layer_ensemble")
-
-
 def plot_summary_from_csv(
     file,
 ):
 
     frame = read_csv(file)
-    frame = frame.sort_values(by=['mean'])
+    frame = frame.sort_values(by=["mean"])
 
     frame["agent"] = Categorical(
         frame["agent"],
@@ -1247,12 +1396,12 @@ def plot_summary_from_csv(
         ggplot(frame)
         + aes(x="agent", y="mean")
         + geom_hline(yintercept=1)
-        +
-        # ylim(0, 2) +
-        scale_y_continuous(trans="log10")
+        + scale_y_continuous(trans="log10")
         + geom_point(aes(colour="agent"), size=4, stroke=0.2)
         + geom_errorbar(
-            aes(colour="agent", ymin="mean-std", ymax="mean+std"), width=0.8, size=1.5,
+            aes(colour="agent", ymin="mean-std", ymax="mean+std"),
+            width=0.8,
+            size=1.5,
         )
         + theme(axis_title=element_text(size=15), axis_text=element_text(size=9))
         + scale_color_discrete(guide=False)
@@ -1261,24 +1410,96 @@ def plot_summary_from_csv(
         + xlab("Method")
     )
     plot.save(
-        file
-        + ".png",
+        file + ".png",
         dpi=600,
     )
 
 
-# plot_summary_from_csv("plots_ranked/summary_all_enn_id10_100.csv")
+def create_combined_summary_plots(summary_input_dims=[[1, 10, 100, 1000], [10, 100, 1000]]):
 
-# plot_optimized_layer_ensemble_speed()
+    files = glob("results/results_*.txt")
 
-# plot_summary(files, [100])
-# plot_summary_vnn(files, [10, 100, 1000])
+    for ids in summary_input_dims:
+        plot_summary(
+            files, ids
+        )
 
-for ids in summary_input_dims:
-    plot_ranked_ensemble_summary(files, ids)
 
-# for ids in summary_input_dims:
-#     plot_ensemble_summary(files, ids)
+def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]]):
 
-# plot_all_hyperexperiment_frames(files)
-# plot_all_single_frames(files)
+    global summary_select_agent_params
+    summary_select_agent_params = {}
+    files = glob("results/results_*vnn*")
+
+    make_vnn_ranked_params(num_samples, use_ranked=True)
+
+    for ids in summary_input_dims:
+        plot_ranked_ensemble_summary(
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="VNN"
+        )
+
+
+def create_ranked_bbb_plots(num_samples=100, summary_input_dims=[[1, 10, 100, 1000]]):
+
+    global summary_select_agent_params
+    summary_select_agent_params = {}
+
+    files = glob("results/results_all_bnn*")
+    make_bbb_ranked_params(num_samples, use_ranked=True)
+
+    for ids in summary_input_dims:
+        plot_ranked_ensemble_summary(
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="BBB"
+        )
+
+
+def create_ranked_dropout_plots(
+    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]]
+):
+
+    global summary_select_agent_params
+    summary_select_agent_params = {}
+
+    files = glob("results/results_all_bnn*")
+    make_dropout_ranked_params(num_samples, use_ranked=True)
+
+    for ids in summary_input_dims:
+        plot_ranked_ensemble_summary(
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="Dropout"
+        )
+
+
+def create_ranked_hypermodel_plots(
+    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]]
+):
+
+    global summary_select_agent_params
+    summary_select_agent_params = {}
+
+    files = glob("results/results_all_bnn*")
+    make_hypermodel_ranked_params(num_samples, use_ranked=True)
+
+    for ids in summary_input_dims:
+        plot_ranked_ensemble_summary(
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="Hypermodels"
+        )
+
+
+def create_ranked_dbnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]]):
+
+    create_ranked_vnn_plots(
+        num_samples=num_samples, summary_input_dims=summary_input_dims
+    )
+    create_ranked_bbb_plots(
+        num_samples=num_samples, summary_input_dims=summary_input_dims
+    )
+    create_ranked_dropout_plots(
+        num_samples=num_samples, summary_input_dims=summary_input_dims
+    )
+    create_ranked_hypermodel_plots(
+        num_samples=num_samples, summary_input_dims=summary_input_dims
+    )
+
+
+if __name__ == "__main__":
+    Fire()

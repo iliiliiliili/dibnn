@@ -261,9 +261,6 @@ def combine_results(experiment_group: str, seeds: List[int], agent_name: str, in
                             + "std_error="
                             + str(std_error)
                             + " "
-                            + "indexer="
-                            + str(id)
-                            + " "
                             + " ".join(
                                 [
                                     str(k) + "=" + str(v)
@@ -275,7 +272,6 @@ def combine_results(experiment_group: str, seeds: List[int], agent_name: str, in
                             )
                             + "\n"
                         )
-
 
 
 def main(
