@@ -1415,7 +1415,7 @@ def plot_summary_from_csv(
     )
 
 
-def create_combined_summary_plots(summary_input_dims=[[1, 10, 100, 1000], [10, 100, 1000]]):
+def create_combined_summary_plots(summary_input_dims=[[1, 10, 100, 1000], [10, 100, 1000], [1000]]):
 
     files = glob("results/results_*.txt")
 
