@@ -20,6 +20,7 @@
 from typing import Callable, Optional
 
 from absl import flags
+from pandas import DataFrame
 from enn_pytorch import base
 import torch
 import torch.nn as nn
@@ -29,6 +30,31 @@ from torch.utils.data import DataLoader, TensorDataset
 
 FLAGS = flags.FLAGS
 
+
+float_fields = [
+    "noise_scale",
+    "prior_scale",
+    "dropout_rate",
+    "regularization_scale",
+    "sigma_0",
+    "learning_rate",
+    "mean_error",
+    "std_error",
+]
+int_fields = [
+    "num_ensemble",
+    "num_layers",
+    "hidden_size",
+    "index_dim",
+    "num_index_samples",
+    "indexer",
+    # "num_batches",
+]
+int_list_fields = [
+    "num_ensembles",
+]
+
+rename = {"num_ensembles": "num_ensemble"}
 
 def epistemic_network_from_module(
     model: nn.Module, indexer: base.EpistemicIndexer,
@@ -153,3 +179,66 @@ def make_test_data(n_samples: int = 20) -> base.BatchIterator:
     """Generate a simple dataset suitable for classification or regression."""
     x, y = datasets.make_moons(n_samples, noise=0.1, random_state=0)
     return make_batch_iterator(base.Batch(x, y))
+
+
+
+def read_results_file(file):
+    with open(file, "r") as f:
+        lines = f.readlines()
+
+        agent_frames = {}
+
+        for line in lines:
+            id, kl, *params = line.replace("\n", "").split(" ")
+
+            f = []
+            for p in params:
+                if "=" in p:
+                    f.append(p)
+                else:
+                    f[-1] += " " + p
+            raw_params = f
+
+            params = []
+
+            agent = None
+
+            for p in raw_params:
+                k, v = p.split("=")
+                if k == "agent":
+                    agent = v
+                else:
+                    params.append(p)
+
+            id = int(id)
+            kl = float(kl)
+
+            if agent not in agent_frames:
+                agent_frames[agent] = {"kl": []}
+
+            agent_frames[agent]["kl"].append(kl)
+            # agent_frames[agent]["kl"].append(min(2, kl))
+
+            for p in params:
+                k, v = p.split("=")
+
+                if k in float_fields:
+                    v = float(v)
+                elif k in int_fields:
+                    v = int(v)
+                elif k in int_list_fields:
+                    v = int(v.split("]")[0].split(" ")[-1])
+
+                if k in rename:
+                    k = rename[k]
+
+                if k not in agent_frames[agent]:
+                    agent_frames[agent][k] = []
+
+                agent_frames[agent][k].append(v)
+
+        for agent in agent_frames.keys():
+            agent_frames[agent] = DataFrame(agent_frames[agent])
+
+        return agent_frames
+
