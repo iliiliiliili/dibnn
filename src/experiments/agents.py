@@ -26,7 +26,7 @@ from src.experiments import enn_losses
 import torch
 import torch.optim as optim
 
-from src.experiments.random import split_seed
+from src.experiments.seeds import split_seed
 
 
 def logging_freq(num_steps: int, log_freq: Optional[int] = None) -> int:
@@ -41,7 +41,7 @@ class VanillaEnnConfig:
     """Configuration options for the VanillaEnnAgent."""
 
     enn_ctor: enn_losses.EnnCtor
-    loss_ctor: enn_losses.LossCtor = enn_losses.default_enn_loss()
+    loss_ctor: enn_losses.LossCtor
     optimizer_ctor: Callable = None  # Function returning torch optimizer
     training_steps: Optional[int] = 1000
     batch_size: Optional[int] = None
@@ -57,28 +57,27 @@ class VanillaEnnConfig:
 
     def __post_init__(self):
         if self.optimizer_ctor is None:
+            print("Using default Adam optimizer with lr=1e-3")
             self.optimizer_ctor = lambda params: optim.Adam(params, lr=1e-3)
         if self.training_steps is None:
+            # self.training_steps = 2000
             self.training_steps = 1000
 
 
 def extract_enn_sampler(
     model: torch.nn.Module,
     enn: enn_base.EpistemicNetwork,
+    device
 ) -> testbed_base.EpistemicSampler:
     """Extract an epistemic sampler from a trained ENN."""
 
-    def enn_sampler(x: torch.Tensor, seed: int = 0) -> torch.Tensor:
+    def enn_sampler(x: torch.Tensor, seed: int = 0, num_samples: int = 1) -> torch.Tensor:
         """Generate a random sample from posterior distribution at x."""
         with torch.no_grad():
-            if isinstance(x, torch.Tensor):
-                inputs = x
-            else:
-                inputs = torch.tensor(x, dtype=torch.float32)
 
-            # Sample an index and get predictions
-            index = enn.indexer(seed)
-            net_out = enn.apply(model, inputs, index)
+            batched_indexer = utils.make_batch_indexer(enn.indexer, num_samples)
+            indices = batched_indexer(seed, device)
+            net_out = enn.apply(model, x, indices)
             net_out = utils.parse_net_output(net_out)
 
             return net_out
@@ -135,7 +134,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
             # Compute loss
             train_seed, run_seed = split_seed(train_seed, 2)
-            loss, metrics = loss_fn(enn, model, batch, run_seed)
+            loss, metrics = loss_fn(enn, model, batch, run_seed, device)
 
             # Backward pass
             optimizer.zero_grad()
@@ -154,4 +153,4 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
             steps += max(1, batch.x.shape[0] // 100)
 
         model.eval()
-        return extract_enn_sampler(model, enn)
+        return extract_enn_sampler(model, enn, device)

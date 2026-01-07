@@ -81,7 +81,7 @@ def make_dropout_ctor(
     """Factory for creating a dropout-based agent."""
 
     def enn_ctor(prior: testbed_base.PriorKnowledge):
-        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
+        output_sizes = [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
         return networks.MLPDropoutENN(
             output_sizes=output_sizes,
             dropout_rate=dropout_rate,
@@ -108,6 +108,44 @@ def make_dropout_ctor(
         return config
 
     return make_agent_config
+
+
+def make_bbb_ctor(
+    sigma_0: float,
+    learning_rate: float,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    num_index_samples: int = 64,
+    training_steps: Optional[int] = None,
+    batch_size: Optional[int] = None,
+) -> ConfigCtor:
+    """Generate an ensemble agent config."""
+
+    def enn_ctor(prior: testbed_base.PriorKnowledge):
+        output_sizes = [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        return networks.MlpBbbEnn(
+            output_sizes=output_sizes,
+            sigma_0=sigma_0,
+        )
+
+    def optimizer_ctor(params):
+        return optim.Adam(params, lr=learning_rate)
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        config = agents.VanillaEnnConfig(
+            enn_ctor=enn_ctor,
+            loss_ctor=enn_losses.bbb_loss(
+                sigma_0=sigma_0, num_index_samples=num_index_samples
+            ),
+            optimizer_ctor=optimizer_ctor,
+            training_steps=training_steps,
+            batch_size=batch_size,
+        )
+
+        return config
+
+    return make_agent_config
+
 
 
 def make_layer_ensemble_agent(
@@ -200,44 +238,6 @@ def make_layer_ensemble_ctor(
     return make_agent_config
 
 
-def make_bbb_ctor(
-    sigma_0: float,
-    learning_rate: float,
-    hidden_size: int = 50,
-    num_layers: int = 2,
-    num_index_samples: int = 64,
-    seed: int = 0,
-) -> ConfigCtor:
-    """Generate an ensemble agent config."""
-
-    def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
-        """Makes ENN."""
-        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
-        enn = networks.make_bbb_enn(
-            dummy_input=jnp.ones(shape=(prior.input_dim,)),
-            base_output_sizes=output_sizes,
-            sigma_0=sigma_0,
-            scale=True,
-        )
-
-        return enn
-
-    def make_agent_config() -> agents.VanillaEnnConfig:
-        """Factory method to create agent_config, swap this for different agents."""
-        return agents.VanillaEnnConfig(
-            enn_ctor=make_enn,
-            loss_ctor=enn_losses.bbb_loss(
-                sigma_0=sigma_0, num_index_samples=num_index_samples
-            ),
-            optimizer=optax.adam(learning_rate),
-            num_batches=1000,  # Irrelevant for bandit
-            logger=loggers.make_default_logger("experiment", time_delta=0),
-            seed=seed,
-        )
-
-    return make_agent_config
-
-
 def make_dropout_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
@@ -262,12 +262,87 @@ def make_dropout_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_bbb_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting bbb agents
+    for sigma_0 in [1, 10, 100, 200]:
+        for learning_rate in [1e-3, 3e-4, 1e-4]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    settings = {
+                        "agent": "bbb",
+                        "sigma_0": sigma_0,
+                        "learning_rate": learning_rate,
+                        "num_layers": num_layers,
+                        "hidden_size": hidden_size,
+                    }
+                    config_ctor = make_bbb_ctor(
+                        sigma_0, learning_rate, hidden_size, num_layers
+                    )
+                    sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+def make_bbb_selected_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting bbb agents
+    for sigma_0 in [100, 200]:
+        for learning_rate in [1e-3, 1e-4]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    settings = {
+                        "agent": "bbb",
+                        "sigma_0": sigma_0,
+                        "learning_rate": learning_rate,
+                        "num_layers": num_layers,
+                        "hidden_size": hidden_size,
+                    }
+                    config_ctor = make_bbb_ctor(
+                        sigma_0, learning_rate, hidden_size, num_layers, training_steps=2000
+                    )
+                    sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
+def make_bbb_debug() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting bbb agents
+    for sigma_0 in [100]:
+        for learning_rate in [1e-3, 3e-4, 1e-4]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    settings = {
+                        "agent": "bbb",
+                        "sigma_0": sigma_0,
+                        "learning_rate": learning_rate,
+                        "num_layers": num_layers,
+                        "hidden_size": hidden_size,
+                    }
+                    config_ctor = make_bbb_ctor(
+                        sigma_0, learning_rate, hidden_size, num_layers
+                    )
+                    sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
 def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
 
     if agent == "all":
-        agent_sweep = make_dropout_sweep()
+        agent_sweep = make_dropout_sweep() + make_bbb_sweep
     elif agent == "dropout":
         agent_sweep = make_dropout_sweep()
+    elif agent == "bbb":
+        agent_sweep = make_bbb_selected_sweep()
+    elif agent == "bbb_debug":
+        agent_sweep = make_bbb_debug()
     else:
         raise ValueError(f"agent={agent} is not valid!")
 

@@ -28,6 +28,8 @@ import numpy as np
 from sklearn import datasets
 from torch.utils.data import DataLoader, TensorDataset
 
+from src.experiments.seeds import split_seed
+
 FLAGS = flags.FLAGS
 
 
@@ -96,16 +98,13 @@ def make_batch_indexer(
 ) -> base.EpistemicIndexer:
     """Batches an EpistemicIndexer to produce batch_size index samples."""
 
-    def batch_indexer(key: base.RngKey) -> base.Index:
-        if isinstance(key, int):
-            keys = [key + i for i in range(batch_size)]
-        else:
-            keys = [torch.Generator().manual_seed(key + i) for i in range(batch_size)]
-        indices = [indexer(k) for k in keys]
+    def batch_indexer(key: base.RngKey, device) -> base.Index:
+        keys = split_seed(key, batch_size)
+        indices = [indexer(k, device) for k in keys]
         if isinstance(indices[0], torch.Tensor):
             return torch.stack(indices)
         else:
-            return np.stack(indices)
+            return indices
 
     return batch_indexer
 

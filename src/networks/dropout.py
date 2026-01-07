@@ -50,11 +50,8 @@ class MLPDropoutENN(base.EpistemicNetwork):
                 # Build layers
                 layers = []
                 sizes = list(output_sizes)
-                for i, size in enumerate(sizes):
-                    if i == 0:
-                        layers.append(nn.LazyLinear(size))
-                    else:
-                        layers.append(nn.Linear(sizes[i - 1], size))
+                for i in range(1, len(sizes)):
+                    layers.append(nn.Linear(sizes[i - 1], sizes[i]))
 
                     # Add dropout between layers (not after last layer)
                     if i < len(sizes) - 1:
@@ -66,7 +63,7 @@ class MLPDropoutENN(base.EpistemicNetwork):
                 # Apply custom initialization if provided
                 if w_init is not None or b_init is not None:
                     for module in self.layers:
-                        if isinstance(module, (nn.Linear, nn.LazyLinear)):
+                        if isinstance(module, (nn.Linear)):
                             if w_init is not None:
                                 w_init(module.weight)
                             if b_init is not None and module.bias is not None:

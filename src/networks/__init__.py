@@ -22,6 +22,8 @@
 # Dropout
 from src.networks.dropout import MLPDropoutENN
 
+from src.networks.bbb import MlpBbbEnn
+
 # Ensemble
 from src.networks.ensembles import Ensemble
 from src.networks.ensembles import make_mlp_ensemble_prior_fns

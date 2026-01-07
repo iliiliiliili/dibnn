@@ -24,7 +24,7 @@ from src.losses.single_index import add_data_noise
 from src.losses.single_index import average_single_index_loss
 from src.losses.single_index import BatchedL2Loss
 from src.losses.single_index import batched_average_single_index_loss
-from src.losses.single_index import ElboLoss
+from src.losses.single_index import NElboLoss
 from src.losses.single_index import L2Loss
 from src.losses.single_index import SingleIndexLossFn
 from src.losses.single_index import XentLoss

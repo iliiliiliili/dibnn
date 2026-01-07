@@ -844,6 +844,29 @@ def make_bbb_sweep() -> List[AgentCtorConfig]:
 
     return sweep
 
+def make_bbb_debug() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting bbb agents
+    for sigma_0 in [100]:
+        for learning_rate in [1e-3, 3e-4, 1e-4]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    settings = {
+                        "agent": "bbb",
+                        "sigma_0": sigma_0,
+                        "learning_rate": learning_rate,
+                        "num_layers": num_layers,
+                        "hidden_size": hidden_size,
+                    }
+                    config_ctor = make_bbb_ctor(
+                        sigma_0, learning_rate, hidden_size, num_layers
+                    )
+                    sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
 
 def make_vnn_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
@@ -1085,6 +1108,8 @@ def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
         agent_sweep = make_dropout_sweep()
     elif agent == "bbb":
         agent_sweep = make_bbb_sweep()
+    elif agent == "bbb_debug":
+        agent_sweep = make_bbb_debug()
     elif agent == "vnn":
         agent_sweep = make_vnn_sweep()
     elif agent == "vnn_selected":

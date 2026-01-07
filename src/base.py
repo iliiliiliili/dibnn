@@ -30,7 +30,7 @@ import typing_extensions
 
 DataIndex = torch.Tensor  # Always integer
 Index = int  # Epistemic index, paired with network
-RngKey = Union[int, torch.Generator]  # Random key/generator
+RngKey = int  # Random key
 
 
 class OutputWithPrior(NamedTuple):

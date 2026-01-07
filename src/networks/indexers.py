@@ -23,12 +23,14 @@ from typing import List, Sequence
 from src import base
 import torch
 import numpy as np
+from src.experiments.seeds import split_seed
+
 
 
 class PrngIndexer(base.EpistemicIndexer):
     """Index by random generator sequence."""
 
-    def __call__(self, key: base.RngKey) -> base.Index:
+    def __call__(self, key: base.RngKey, device=None) -> base.Index:
         if isinstance(key, int):
             return key
         return key
@@ -154,15 +156,36 @@ class LayerEnsembleIndexer(base.EpistemicIndexer):
 class ScaledGaussianIndexer(base.EpistemicIndexer):
     """Samples index as Gaussian(0, scale)."""
 
-    index_dim: int
+    index_dims: List[int]
     scale: float = 1.0
 
-    def __call__(self, key: base.RngKey) -> base.Index:
+    def __call__(self, key: base.RngKey, device) -> base.Index:
         if isinstance(key, int):
             torch.manual_seed(key)
-            return torch.randn(self.index_dim) * self.scale
+            return torch.randn(self.index_dims, device=device) * self.scale
         else:
-            return torch.randn(self.index_dim, generator=key) * self.scale
+            return torch.randn(self.index_dims, generator=key, device=device) * self.scale
+
+@dataclasses.dataclass
+class SetScaledGaussianIndexer(base.EpistemicIndexer):
+    """Samples index as Gaussian(0, scale)."""
+
+    index_dims_list: List[List[int]]
+    scale: float = 1.0
+
+    def __init__(self, index_dims_list: List[List[int]], scale: float = 1.0):
+        self.index_dims_list = index_dims_list
+        self.scale = scale / np.sqrt(sum([np.prod(dims) for dims in index_dims_list]))
+
+        self.sub_indexers = [ScaledGaussianIndexer(index_dims, self.scale) for index_dims in index_dims_list]
+
+    def __call__(self, key: base.RngKey, device) -> base.Index:
+
+        keys = split_seed(key, len(self.sub_indexers))
+        result = [ind(k, device) for ind, k in zip(self.sub_indexers, keys)]
+
+        return result
+
 
 
 @dataclasses.dataclass

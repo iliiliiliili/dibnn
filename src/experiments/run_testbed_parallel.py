@@ -22,7 +22,7 @@ import fire
 from src.experiments import agent_factories
 from src.experiments import agents
 from src.experiments import load
-from src.experiments.random import split_seed
+from src.experiments.seeds import split_seed
 import os
 from multiprocessing import Pool
 import random
@@ -30,28 +30,11 @@ from src.utils import read_results_file
 
 
 def single_run(
-    ind, dr, ns, seed, agent_id, agent_seed, agent_name, experiment_group, device
+    ind, dr, ns, seed, agent_id, agent_seed, agent_name, experiment_group, results_file, device
 ):
 
     dr = float(dr)
     ns = float(ns)
-
-    result_folder = (
-        "results/results_"
-        + experiment_group
-        + ("_" if len(experiment_group) > 0 else "")
-        + agent_name
-        + "_id"
-        + str(ind)
-        + "dr"
-        + str(dr)
-        + "ns"
-        + str(ns)
-    )
-
-    results_file = (
-        result_folder + "/agentid" + str(agent_id) + "_seed" + str(seed) + ".txt"
-    )
 
     if os.path.exists(results_file):
         print(".", end="")
@@ -65,32 +48,24 @@ def single_run(
         noise_std=ns,
     )
 
-    # print(
-    #     "input_dim",
-    #     ind,
-    #     "data_ratio",
-    #     dr,
-    #     "noise_std",
-    #     ns,
-    #     "agent_id", agent_id,
-    # )
-
     agent_config = agent_factories.load_agent_config(agent_id, agent_name)
 
     # Form the appropriate agent for training
     agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
+    train_seed, evaluation_seed = split_seed(agent_seed, 2)
+
     # Train
     enn_sampler = agent(
         problem.train_data,
-        agent_seed,
+        train_seed,
         problem.prior_knowledge,
         device=device,
         logging="none",
     )
 
     # Evaluate the quality of the ENN sampler after training
-    kl_quality = problem.evaluate_quality(enn_sampler, device=device)
+    kl_quality = problem.evaluate_quality(enn_sampler, seed=evaluation_seed, device=device)
 
     print("#", end="")
 
@@ -102,8 +77,6 @@ def single_run(
     #     + "std_error="
     #     + str(kl_quality.extra["std_error"])
     # )
-
-    os.makedirs(result_folder, exist_ok=True)
 
     with open(
         results_file,
@@ -172,14 +145,18 @@ def run_experiments(experiments, devices, processes_per_device, debug=False):
                     device=device,
                 )
             else:
+
+                def error_callback(e, args=experiment_args):
+                    print("/")
+                    with open("./errors.log", "a") as f:
+                        f.write(f"Error: {str(e)}\nArgs: {args}\n")
+
                 # pool.apply(
                 pool.apply_async(
                     single_run,
                     args=(*experiment_args,),
                     kwds={"device": device},
-                    error_callback=lambda e, args=experiment_args: open(
-                        "./errors.log", "a"
-                    ).write(f"Error: {str(e)}\nArgs: {args}\n"),
+                    error_callback=error_callback,
                 )
 
     for pool in pools:
@@ -198,13 +175,14 @@ def combine_results(
     noise_stds: list,
     agent_id_start: int,
     agent_id_end: int,
+    results_folder: str,
 ):
     """Combine results from multiple runs into single files."""
     for ind in input_dims:
         for dr in data_ratios:
             for ns in noise_stds:
-                result_folder = (
-                    "results/results_"
+                single_result_folder = (
+                    f"{results_folder}/{agent_name}/results_"
                     + experiment_group
                     + ("_" if len(experiment_group) > 0 else "")
                     + agent_name
@@ -215,8 +193,19 @@ def combine_results(
                     + "ns"
                     + str(ns)
                 )
-
-                combined_filepath = result_folder + ".txt"
+                combined_filepath = (
+                    f"{results_folder}/results_"
+                    + experiment_group
+                    + ("_" if len(experiment_group) > 0 else "")
+                    + agent_name
+                    + "_id"
+                    + str(ind)
+                    + "dr"
+                    + str(dr)
+                    + "ns"
+                    + str(ns)
+                    + ".txt"
+                )
 
                 with open(combined_filepath, "w") as combined_file:
                     for agent_id in range(agent_id_start, agent_id_end):
@@ -225,7 +214,7 @@ def combine_results(
 
                         for seed in seeds:
                             agent_filepath = (
-                                result_folder
+                                single_result_folder
                                 + "/agentid"
                                 + str(agent_id)
                                 + "_seed"
@@ -240,10 +229,13 @@ def combine_results(
                         kls = []
                         mean_errors = []
                         std_errors = []
+
+                        result_agent_name = list(agent_results[0].keys())[0]
+
                         for result in agent_results:
-                            kls.extend(result[agent_name]["kl"])
-                            mean_errors.extend(result[agent_name]["mean_error"])
-                            std_errors.extend(result[agent_name]["std_error"])
+                            kls.extend(result[result_agent_name]["kl"])
+                            mean_errors.extend(result[result_agent_name]["mean_error"])
+                            std_errors.extend(result[result_agent_name]["std_error"])
 
                         agent_settings = agent_factories.load_agent_config(
                             agent_id, agent_name
@@ -293,8 +285,9 @@ def main(
     agent_name="all",
     experiment_group="",
     devices=2,
-    processes_per_device=6,
+    processes_per_device=5,
     debug=False,
+    results_folder="results",
 ):
     """Run testbed sweep.
 
@@ -309,7 +302,8 @@ def main(
         experiment_group: Name of the experiment group.
     """
 
-    os.makedirs("results", exist_ok=True)
+    os.makedirs(results_folder, exist_ok=True)
+    os.makedirs(f"{results_folder}/{agent_name}", exist_ok=True)
 
     if isinstance(input_dim, int):
         input_dim = [input_dim]
@@ -350,19 +344,8 @@ def main(
 
                         agent_id = agent_id_start + i
 
-                        arguments = (
-                            ind,
-                            dr,
-                            ns,
-                            seed,
-                            agent_id,
-                            agent_seed,
-                            agent_name,
-                            experiment_group,
-                        )
-
-                        result_folder = (
-                            "results/results_"
+                        single_result_folder = (
+                            f"{results_folder}/{agent_name}/results_"
                             + experiment_group
                             + ("_" if len(experiment_group) > 0 else "")
                             + agent_name
@@ -373,14 +356,28 @@ def main(
                             + "ns"
                             + str(ns)
                         )
+                        
+                        os.makedirs(single_result_folder, exist_ok=True)
 
                         results_file = (
-                            result_folder
+                            single_result_folder
                             + "/agentid"
                             + str(agent_id)
                             + "_seed"
                             + str(seed)
                             + ".txt"
+                        )
+
+                        arguments = (
+                            ind,
+                            dr,
+                            ns,
+                            seed,
+                            agent_id,
+                            agent_seed,
+                            agent_name,
+                            experiment_group,
+                            results_file,
                         )
 
                         if os.path.exists(results_file):
@@ -411,6 +408,7 @@ def main(
         noise_std,
         agent_id_start,
         max_agent_id,
+        results_folder
     )
 
     print("Combined results")

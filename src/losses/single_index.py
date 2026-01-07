@@ -64,9 +64,10 @@ def average_single_index_loss(
         model: nn.Module,
         batch: base.Batch,
         key: base.RngKey,
+        device: str,
     ) -> torch.Tensor:
         batched_indexer = utils.make_batch_indexer(enn.indexer, num_index_samples)
-        indices = batched_indexer(key)
+        indices = batched_indexer(key, device)
 
         losses = []
         metrics_list = []
@@ -200,29 +201,20 @@ class L2Loss(SingleIndexLossFn):
         """L2 regression applied to a single epistemic index."""
         net_out = utils.parse_net_output(apply(model, batch.x, index))
 
-        # Convert to tensors if needed
-        if isinstance(batch.y, torch.Tensor):
-            y = batch.y
-        else:
-            y = torch.tensor(batch.y, dtype=torch.float32)
-
-        if isinstance(net_out, torch.Tensor):
-            net_tensor = net_out
-        else:
-            net_tensor = torch.tensor(net_out, dtype=torch.float32)
-
-        sq_loss = torch.square(net_tensor - y)
+        sq_loss = torch.square(net_out - batch.y)
 
         if batch.weights is None:
-            batch_weights = torch.ones_like(y)
+            batch_weights = torch.ones_like(batch.y)
         else:
             batch_weights = (
                 batch.weights
                 if isinstance(batch.weights, torch.Tensor)
                 else torch.tensor(batch.weights, dtype=torch.float32)
             )
+        
+        result = torch.mean(batch_weights * sq_loss)
 
-        return torch.mean(batch_weights * sq_loss), {}
+        return result, {}
 
 
 @dataclasses.dataclass
@@ -304,7 +296,7 @@ class AccuracyErrorLoss(SingleIndexLossFn):
 
 
 @dataclasses.dataclass
-class ElboLoss(SingleIndexLossFn):
+class NElboLoss(SingleIndexLossFn):
     """Standard VI loss (negative of evidence lower bound).
 
     Given latent variable u with model density q(u), prior density p_0(u)
@@ -317,16 +309,22 @@ class ElboLoss(SingleIndexLossFn):
 
     log_likelihood_fn: Callable[[base.Output, base.Batch], float]
     model_prior_kl_fn: Callable[[base.Output, nn.Module, base.Index], float]
+    num_index_samples: int
 
     def __call__(
         self,
-        apply: base.ApplyFn,
+        enn: base.EpistemicNetwork,
         model: nn.Module,
         batch: base.Batch,
-        index: base.Index,
+        key: base.RngKey,
+        device: str,
     ) -> Tuple[torch.Tensor, base.LossMetrics]:
         """This function returns a one-sample MC estimate of the ELBO."""
-        out = apply(model, batch.x, index)
+
+        batched_indexer = utils.make_batch_indexer(enn.indexer, self.num_index_samples)
+        indices = batched_indexer(key, device)
+
+        out = enn.apply(model, batch.x, indices)
         log_likelihood = self.log_likelihood_fn(out, batch)
-        model_prior_kl = self.model_prior_kl_fn(out, model, index)
+        model_prior_kl = self.model_prior_kl_fn(out, model, indices)
         return model_prior_kl - log_likelihood, {}

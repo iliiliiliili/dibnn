@@ -21,9 +21,10 @@ import fire
 from src.experiments import agent_factories
 from src.experiments import agents
 from src.experiments import load
-from src.experiments.random import split_seed
+from src.experiments.seeds import split_seed
 import os
-
+import torch
+from src import torch_repr
 
 def main(
     input_dim=(1, 10, 100),
@@ -35,6 +36,7 @@ def main(
     agent_name="all",
     experiment_group="",
     device="cuda:0",
+    results_folder="results",
 ):
     """Run testbed sweep.
 
@@ -49,7 +51,8 @@ def main(
         experiment_group: Name of the experiment group.
     """
 
-    os.makedirs("results", exist_ok=True)
+    os.makedirs(results_folder, exist_ok=True)
+    os.makedirs(f"{results_folder}/{agent_name}", exist_ok=True)
 
     if isinstance(input_dim, int):
         input_dim = [input_dim]
@@ -97,16 +100,18 @@ def main(
                     # Form the appropriate agent for training
                     agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
+                    train_seed, evaluation_seed = split_seed(agent_seed, 2)
+
                     # Train
                     enn_sampler = agent(
                         problem.train_data,
-                        agent_seed,
+                        train_seed,
                         problem.prior_knowledge,
                         device=device,
                     )
 
                     # Evaluate the quality of the ENN sampler after training
-                    kl_quality = problem.evaluate_quality(enn_sampler)
+                    kl_quality = problem.evaluate_quality(enn_sampler, seed=evaluation_seed, device=device)
                     print(
                         f"kl_estimate={kl_quality.kl_estimate}"
                         + " mean_error="
@@ -118,7 +123,7 @@ def main(
                     all_results.append(kl_quality)
 
                     with open(
-                        "results/results_"
+                        f"{results_folder}/{agent_name}/results_"
                         + experiment_group
                         + ("_" if len(experiment_group) > 0 else "")
                         + agent_name

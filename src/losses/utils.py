@@ -26,8 +26,8 @@ def add_l2_weight_decay(
     except TypeError:
         scale_fn = scale  # Assuming scale is a Callable.
 
-    def new_loss(a, model: torch.nn.Module, c, d) -> Tuple[torch.Tensor, Dict]:
-        loss, metrics = loss_fn(a, model, c, d)
+    def new_loss(a, model: torch.nn.Module, c, d, device) -> Tuple[torch.Tensor, Dict]:
+        loss, metrics = loss_fn(a, model, c, d, device)
         decay = l2_weights_with_predicate(scale_fn(model.state_dict()), predicate)
         total_loss = loss + decay
         metrics["decay"] = decay

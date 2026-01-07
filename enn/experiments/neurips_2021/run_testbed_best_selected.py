@@ -54,6 +54,7 @@ flags.DEFINE_enum(
         "dropout",
         "hypermodel",
         "bbb",
+        "bbb_debug",
         "vnn",
         "vnn_selected",
         "vnn_lrelu",
@@ -75,7 +76,7 @@ FLAGS = flags.FLAGS
 
 def main(_):
 
-    os.makedirs("results", exist_ok=True)
+    os.makedirs("results-jax", exist_ok=True)
     os.makedirs("single_runs", exist_ok=True)
     
     print("Best Selected Run")
@@ -171,7 +172,7 @@ def main(_):
                         kls.append(kl_quality)
 
                     with open(
-                        "results/results_"
+                        "results-jax/results_"
                         + FLAGS.experiment_group
                         + ("_" if len(FLAGS.experiment_group) > 0 else "")
                         + FLAGS.agent

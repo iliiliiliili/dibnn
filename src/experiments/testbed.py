@@ -176,7 +176,7 @@ class TestbedGPRegression(TestbedProblem):
         return self.prior
 
     def evaluate_quality(
-        self, enn_sampler: EpistemicSampler, num_samples=None, device: str = "cuda:0"
+        self, enn_sampler: EpistemicSampler, seed, num_samples=None, device: str = "cuda:0"
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
         num_samples = self.num_enn_samples if num_samples is None else num_samples
@@ -187,9 +187,11 @@ class TestbedGPRegression(TestbedProblem):
         posterior_std = torch.sqrt(torch.diag(self.data_sampler.test_cov)).to(device)
         posterior_std += self.std_ridge
 
-        enn_samples = torch.stack(
-            [enn_sampler(x_test, i)[:, 0] for i in range(num_samples)]
-        )
+        # enn_samples = torch.stack(
+        #     [enn_sampler(x_test, i)[:, 0] for i in range(num_samples)]
+        # )
+        enn_samples = enn_sampler(x_test, seed, num_samples).squeeze(-1)
+
         assert enn_samples.shape == (num_samples, num_test)
         enn_mean = torch.mean(enn_samples, dim=0)
         enn_std = torch.std(enn_samples, dim=0) + self.std_ridge
