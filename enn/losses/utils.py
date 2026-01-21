@@ -83,7 +83,8 @@ def combine_single_index_losses_as_metric(
 
 
 def combine_losses_as_metric(
-    train_loss: base.LossFn, extra_losses: Dict[str, base.LossFn],
+    train_loss: base.LossFn,
+    extra_losses: Dict[str, base.LossFn],
 ) -> base.LossFn:
     """Combines train_loss for training with extra_losses in metrics."""
 

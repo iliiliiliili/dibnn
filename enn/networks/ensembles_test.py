@@ -29,7 +29,12 @@ import numpy as np
 
 class EnsemblesTest(parameterized.TestCase):
     @parameterized.parameters(
-        [([], 1, True), ([10, 10], 5, True), ([], 1, False), ([10, 10], 5, False),]
+        [
+            ([], 1, True),
+            ([10, 10], 5, True),
+            ([], 1, False),
+            ([10, 10], 5, False),
+        ]
     )
     def test_ensemble(self, hiddens: List[int], num_ensemble: int, regression: bool):
         """Simple test to run just 10 batches."""
@@ -45,7 +50,12 @@ class EnsemblesTest(parameterized.TestCase):
         experiment.train(10)
 
     @parameterized.parameters(
-        [([], 1, True), ([10, 10], 5, True), ([], 1, False), ([10, 10], 5, False),]
+        [
+            ([], 1, True),
+            ([10, 10], 5, True),
+            ([], 1, False),
+            ([10, 10], 5, False),
+        ]
     )
     def test_ensemble_gp_prior(
         self, hiddens: List[int], num_ensemble: int, regression: bool

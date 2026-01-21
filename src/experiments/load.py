@@ -60,7 +60,7 @@ def make_benchmark_kernel(input_dim: int = 1):
 
 
 def gaussian_data(
-    seed: int, num_train: int, input_dim: int, num_test: int
+    seed: int, num_train: int, input_dim: int, num_test: int, use_double_precision: bool = True
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Generate Gaussian training and test data.
 
@@ -77,13 +77,13 @@ def gaussian_data(
     generator.manual_seed(seed)
 
     # Generate training data
-    x_train = torch.randn(num_train, input_dim, generator=generator)
+    x_train = torch.randn(num_train, input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     # Generate test data
-    x_test = torch.randn(num_test, input_dim, generator=generator)
+    x_test = torch.randn(num_test, input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     # Generate validation data
-    x_val = torch.randn(num_test, input_dim, generator=generator)
+    x_val = torch.randn(num_test, input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     return x_train, x_test, x_val
 
@@ -108,6 +108,7 @@ class RegressionTestbedConfig:
 
 def regression_load_from_config(
     config: RegressionTestbedConfig,
+    use_double_precision: bool = True,
 ) -> testbed_base.TestbedProblem:
     """Loads regression problem from config.
 
@@ -122,6 +123,7 @@ def regression_load_from_config(
         num_train=config.num_train,
         input_dim=config.input_dim,
         num_test=config.num_test_cache,
+        use_double_precision=use_double_precision,
     )
     data_sampler = testbed.GPRegression(
         kernel_fn=config.kernel_ctor(config.input_dim),
@@ -151,6 +153,7 @@ def regression_load(
     seed: int,
     noise_std: float,
     dataset_folder: str = "datasets",
+    use_double_precision: bool = True,
 ) -> testbed_base.TestbedProblem:
     """Load GP regression from sweep hyperparameters.
 
@@ -171,13 +174,13 @@ def regression_load(
 
     filepath = os.path.join(
         dataset_folder,
-        f"regression_id{input_dim}dr{data_ratio}ns{noise_std}seed{seed}.pt",
+        f"regression_id{input_dim}dr{data_ratio}ns{noise_std}seed{seed}{'_double' if use_double_precision else ''}.pt",
     )
 
     if os.path.exists(filepath):
         tb = testbed.TestbedGPRegression.load(filepath)
         return tb
     else:
-        tb = regression_load_from_config(config)
+        tb = regression_load_from_config(config, use_double_precision)
         tb.save(filepath)
         return tb

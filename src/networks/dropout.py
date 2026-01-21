@@ -17,6 +17,7 @@
 # limitations under the License.
 # ============================================================================
 """Implementing Dropout as an ENN in PyTorch."""
+import math
 from typing import Optional, Sequence
 
 from src import base
@@ -35,6 +36,7 @@ class MLPDropoutENN(base.EpistemicNetwork):
         dropout_input: bool = True,
         w_init: Optional[callable] = None,
         b_init: Optional[callable] = None,
+        use_double_precision: bool = False,
     ):
         """MLP with dropout as an ENN."""
 
@@ -51,7 +53,7 @@ class MLPDropoutENN(base.EpistemicNetwork):
                 layers = []
                 sizes = list(output_sizes)
                 for i in range(1, len(sizes)):
-                    layers.append(nn.Linear(sizes[i - 1], sizes[i]))
+                    layers.append(nn.Linear(sizes[i - 1], sizes[i], dtype=torch.float64 if use_double_precision else torch.float32))
 
                     # Add dropout between layers (not after last layer)
                     if i < len(sizes) - 1:
@@ -60,14 +62,19 @@ class MLPDropoutENN(base.EpistemicNetwork):
 
                 self.layers = nn.ModuleList(layers)
 
-                # Apply custom initialization if provided
-                if w_init is not None or b_init is not None:
-                    for module in self.layers:
-                        if isinstance(module, (nn.Linear)):
-                            if w_init is not None:
-                                w_init(module.weight)
-                            if b_init is not None and module.bias is not None:
+                for module in self.layers:
+                    if isinstance(module, (nn.Linear)):
+                        if w_init is not None:
+                            w_init(module.weight)
+                        else:
+                            stddev = 1.0 / math.sqrt(sizes[i - 1])
+                            torch.nn.init.trunc_normal_(module.weight, std=stddev)
+                        
+                        if module.bias is not None:
+                            if b_init is not None:
                                 b_init(module.bias)
+                            else:
+                                torch.nn.init.zeros_(module.bias)
 
             def forward(self, inputs: torch.Tensor, index: base.Index) -> base.Output:
                 torch.manual_seed(index)
@@ -91,8 +98,15 @@ class MLPDropoutENN(base.EpistemicNetwork):
         ) -> base.Output:
             # Always use training mode for dropout
             model.train()
-            return model(inputs, index)
 
+            if isinstance(index, int):
+                result = model(inputs, index)
+            else:
+                result = torch.stack(
+                    [model(inputs, i)[:, 0] for i in index]
+                )
+
+            return result
         def init_fn(seed: int) -> nn.Module:
 
             torch.manual_seed(seed)

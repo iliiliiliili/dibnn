@@ -19,5 +19,7 @@
 
 """Exposing the public methods of data_noise - PyTorch version."""
 
-from src.data_noise.base import DataNoise
-from src.data_noise.base import get_indexer
+from src.data_noise.gaussian import GaussianTargetNoise
+from src.data_noise.base import DataNoise, get_indexer
+
+__all__ = ['GaussianTargetNoise', 'DataNoise', 'get_indexer']

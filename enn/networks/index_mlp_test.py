@@ -31,7 +31,8 @@ class NetworkTest(parameterized.TestCase):
         """Simple test to run just 10 batches."""
         test_experiment = supervised.make_test_experiment(regression)
         enn = index_mlp.IndexMLPEnn(
-            output_sizes=hiddens + [test_experiment.num_outputs], index_dim=10,
+            output_sizes=hiddens + [test_experiment.num_outputs],
+            index_dim=10,
         )
         experiment = test_experiment.experiment_ctor(enn)
         experiment.train(10)

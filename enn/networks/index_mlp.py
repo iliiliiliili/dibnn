@@ -65,7 +65,8 @@ class ConcatIndexMLP(base.EpistemicModule):
         var_embedding = jnp.concatenate([out_no_index, input_projection], axis=1)
         var_pred = hk.nets.MLP([self.variance_dim, self.output_dim])(var_embedding)
         return base.OutputWithPrior(
-            train=hk.Linear(self.output_dim)(out), extra={"log_var": var_pred},
+            train=hk.Linear(self.output_dim)(out),
+            extra={"log_var": var_pred},
         )
 
 

@@ -69,11 +69,16 @@ def main(_):
             print("agent_id", agent_id, "of", len(sweep))
 
             f.write(
-                "agent_id=" + str(agent_id) + " " +
-                " ".join(
+                "agent_id="
+                + str(agent_id)
+                + " "
+                + " ".join(
                     [
                         str(k) + "=" + str(v)
-                        for (k, v,) in agent_config.settings.items()
+                        for (
+                            k,
+                            v,
+                        ) in agent_config.settings.items()
                     ]
                 )
                 + "\n"

@@ -65,13 +65,13 @@ class VanillaEnnConfig:
 
 
 def extract_enn_sampler(
-    model: torch.nn.Module,
-    enn: enn_base.EpistemicNetwork,
-    device
+    model: torch.nn.Module, enn: enn_base.EpistemicNetwork, device
 ) -> testbed_base.EpistemicSampler:
     """Extract an epistemic sampler from a trained ENN."""
 
-    def enn_sampler(x: torch.Tensor, seed: int = 0, num_samples: int = 1) -> torch.Tensor:
+    def enn_sampler(
+        x: torch.Tensor, seed: int = 0, num_samples: int = 1
+    ) -> torch.Tensor:
         """Generate a random sample from posterior distribution at x."""
         with torch.no_grad():
 
@@ -90,6 +90,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
     """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
 
     config: VanillaEnnConfig
+    use_double_precision: bool = True
 
     def __call__(
         self,
@@ -101,7 +102,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         # Create the ENN
-        enn = self.config.enn_ctor(prior)
+        enn = self.config.enn_ctor(prior, use_double_precision=self.use_double_precision)
 
         init_seed, dataset_seed, train_seed = split_seed(seed, 3)
 

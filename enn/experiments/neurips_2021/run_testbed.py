@@ -18,6 +18,7 @@
 
 from absl import app
 from absl import flags
+
 # from jax.interpreters.xla import primitive_uses_outfeed
 from enn.experiments.neurips_2021 import agent_factories
 from enn.experiments.neurips_2021 import agents
@@ -113,9 +114,7 @@ def main(_):
                     agent = agents.VanillaEnnAgent(agent_config.config_ctor())
 
                     # Train
-                    enn_sampler = agent(
-                        problem.train_data, problem.prior_knowledge
-                    )
+                    enn_sampler = agent(problem.train_data, problem.prior_knowledge)
 
                     # Evaluate the quality of the ENN sampler after training
                     kl_quality = problem.evaluate_quality(enn_sampler)

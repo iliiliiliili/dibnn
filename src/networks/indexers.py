@@ -26,7 +26,6 @@ import numpy as np
 from src.experiments.seeds import split_seed
 
 
-
 class PrngIndexer(base.EpistemicIndexer):
     """Index by random generator sequence."""
 
@@ -42,14 +41,14 @@ class EnsembleIndexer(base.EpistemicIndexer):
 
     num_ensemble: int
 
-    def __call__(self, key: base.RngKey) -> base.Index:
+    def __call__(self, key: base.RngKey, device: str) -> base.Index:
         if isinstance(key, int):
             torch.manual_seed(key)
-            return torch.randint(0, self.num_ensemble, []).item()
+            return torch.randint(0, self.num_ensemble, [], device=device).item()
         else:
-            return torch.randint(0, self.num_ensemble, [], generator=key).item()
+            return torch.randint(0, self.num_ensemble, [], generator=key, device=device).item()
 
-    def batched(self, key: base.RngKey, num_samples: int) -> base.Index:
+    def batched(self, key: base.RngKey, num_samples: int, device: str, correlated_index: bool = False) -> base.Index:
         def create_all_samples(num_ensemble):
             result = []
             for q in range(num_ensemble):
@@ -64,7 +63,7 @@ class EnsembleIndexer(base.EpistemicIndexer):
         else:
             generator = key
 
-        replace = num_samples > self.num_ensemble
+        replace = num_samples > self.num_ensemble or (not correlated_index)
         if replace:
             results = torch.tensor(
                 [
@@ -72,13 +71,13 @@ class EnsembleIndexer(base.EpistemicIndexer):
                     for i in torch.randint(
                         0, len(all_samples), [num_samples], generator=generator
                     )
-                ]
+                ], device=device
             )
         else:
             indices = torch.randperm(len(all_samples), generator=generator)[
                 :num_samples
             ]
-            results = torch.tensor([all_samples[i] for i in indices])
+            results = torch.tensor([all_samples[i] for i in indices], device=device)
 
         return results
 
@@ -164,7 +163,10 @@ class ScaledGaussianIndexer(base.EpistemicIndexer):
             torch.manual_seed(key)
             return torch.randn(self.index_dims, device=device) * self.scale
         else:
-            return torch.randn(self.index_dims, generator=key, device=device) * self.scale
+            return (
+                torch.randn(self.index_dims, generator=key, device=device) * self.scale
+            )
+
 
 @dataclasses.dataclass
 class SetScaledGaussianIndexer(base.EpistemicIndexer):
@@ -177,7 +179,10 @@ class SetScaledGaussianIndexer(base.EpistemicIndexer):
         self.index_dims_list = index_dims_list
         self.scale = scale / np.sqrt(sum([np.prod(dims) for dims in index_dims_list]))
 
-        self.sub_indexers = [ScaledGaussianIndexer(index_dims, self.scale) for index_dims in index_dims_list]
+        self.sub_indexers = [
+            ScaledGaussianIndexer(index_dims, self.scale)
+            for index_dims in index_dims_list
+        ]
 
     def __call__(self, key: base.RngKey, device) -> base.Index:
 
@@ -185,7 +190,6 @@ class SetScaledGaussianIndexer(base.EpistemicIndexer):
         result = [ind(k, device) for ind, k in zip(self.sub_indexers, keys)]
 
         return result
-
 
 
 @dataclasses.dataclass

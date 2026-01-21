@@ -30,7 +30,18 @@ from src.utils import read_results_file
 
 
 def single_run(
-    ind, dr, ns, seed, agent_id, agent_seed, agent_name, experiment_group, results_file, device
+    ind,
+    dr,
+    ns,
+    seed,
+    agent_id,
+    agent_seed,
+    agent_name,
+    experiment_group,
+    results_file,
+    use_double_precision,
+    reduce_batch,
+    device,
 ):
 
     dr = float(dr)
@@ -46,12 +57,13 @@ def single_run(
         data_ratio=dr,
         seed=seed,
         noise_std=ns,
+        use_double_precision=use_double_precision,
     )
 
-    agent_config = agent_factories.load_agent_config(agent_id, agent_name)
+    agent_config = agent_factories.load_agent_config(agent_id, agent_name, reduce_batch=reduce_batch)
 
     # Form the appropriate agent for training
-    agent = agents.VanillaEnnAgent(agent_config.config_ctor())
+    agent = agents.VanillaEnnAgent(agent_config.config_ctor(), use_double_precision=use_double_precision)
 
     train_seed, evaluation_seed = split_seed(agent_seed, 2)
 
@@ -65,7 +77,9 @@ def single_run(
     )
 
     # Evaluate the quality of the ENN sampler after training
-    kl_quality = problem.evaluate_quality(enn_sampler, seed=evaluation_seed, device=device)
+    kl_quality = problem.evaluate_quality(
+        enn_sampler, seed=evaluation_seed, device=device
+    )
 
     print("#", end="")
 
@@ -147,7 +161,7 @@ def run_experiments(experiments, devices, processes_per_device, debug=False):
             else:
 
                 def error_callback(e, args=experiment_args):
-                    print("/")
+                    print("/ ", end="")
                     with open("./errors.log", "a") as f:
                         f.write(f"Error: {str(e)}\nArgs: {args}\n")
 
@@ -288,6 +302,8 @@ def main(
     processes_per_device=5,
     debug=False,
     results_folder="results",
+    use_double_precision=False,
+    reduce_batch_dims=[],
 ):
     """Run testbed sweep.
 
@@ -324,13 +340,16 @@ def main(
                         data_ratio=dr,
                         seed=seed,
                         noise_std=ns,
+                        use_double_precision=use_double_precision,
                     )
 
                     print(
                         "Created problem for ind", ind, "dr", dr, "ns", ns, "seed", seed
                     )
+                
+                reduce_batch = ind in reduce_batch_dims
 
-                sweep = agent_factories.load_agent_config_sweep(agent_name)
+                sweep = agent_factories.load_agent_config_sweep(agent_name, reduce_batch=reduce_batch)
                 sweep = (
                     sweep[agent_id_start:]
                     if agent_id_end == -1
@@ -356,7 +375,7 @@ def main(
                             + "ns"
                             + str(ns)
                         )
-                        
+
                         os.makedirs(single_result_folder, exist_ok=True)
 
                         results_file = (
@@ -378,6 +397,8 @@ def main(
                             agent_name,
                             experiment_group,
                             results_file,
+                            use_double_precision,
+                            reduce_batch,
                         )
 
                         if os.path.exists(results_file):
@@ -408,7 +429,7 @@ def main(
         noise_std,
         agent_id_start,
         max_agent_id,
-        results_folder
+        results_folder,
     )
 
     print("Combined results")

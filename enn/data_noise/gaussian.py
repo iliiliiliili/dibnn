@@ -97,7 +97,9 @@ def _make_ensemble_gaussian_noise(noise_std: float, seed: int) -> NoiseFn:
     return noise_fn
 
 
-def _make_layer_ensemble_gaussian_noise(noise_std: float, seed: int, factor=50) -> NoiseFn:
+def _make_layer_ensemble_gaussian_noise(
+    noise_std: float, seed: int, factor=50
+) -> NoiseFn:
     """Factory method to add Gaussian noise for ensemble index."""
     batch_fold_in = jax.vmap(jax.random.fold_in)
     batch_normal = jax.vmap(jax.random.normal)

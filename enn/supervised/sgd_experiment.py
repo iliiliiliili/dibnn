@@ -36,9 +36,9 @@ class TrainingState(NamedTuple):
 class Experiment(supervised_base.BaseExperiment):
     """Class to handle supervised training.
 
-  Optional eval_datasets which is a collection of datasets to *evaluate*
-  the loss on every eval_log_freq steps.
-  """
+    Optional eval_datasets which is a collection of datasets to *evaluate*
+    the loss on every eval_log_freq steps.
+    """
 
     def __init__(
         self,
@@ -74,7 +74,9 @@ class Experiment(supervised_base.BaseExperiment):
 
         # Define the SGD step on the loss
         def sgd_step(
-            state: TrainingState, batch: base.Batch, key: base.RngKey,
+            state: TrainingState,
+            batch: base.Batch,
+            key: base.RngKey,
         ) -> Tuple[TrainingState, base.LossMetrics]:
             # Calculate the loss, metrics and gradients
             (loss, metrics), grads = jax.value_and_grad(self._loss, has_aux=True)(
@@ -83,10 +85,14 @@ class Experiment(supervised_base.BaseExperiment):
             metrics.update({"loss": loss})
             updates, new_opt_state = optimizer.update(grads, state.opt_state)
             new_params = optax.apply_updates(state.params, updates)
-            new_state = TrainingState(params=new_params, opt_state=new_opt_state,)
+            new_state = TrainingState(
+                params=new_params,
+                opt_state=new_opt_state,
+            )
             return new_state, metrics
 
-        self._sgd_step = jax.jit(sgd_step)
+        # self._sgd_step = jax.jit(sgd_step)
+        self._sgd_step = sgd_step
 
         # Initialize networks
         batch = next(self.dataset)
@@ -98,7 +104,9 @@ class Experiment(supervised_base.BaseExperiment):
         self.logger = logger or loggers.make_default_logger("experiment", time_delta=0)
         self._train_log_freq = train_log_freq
 
-    def train(self, num_batches: int, evaluate: Callable = None, log_file_name: str = None):
+    def train(
+        self, num_batches: int, evaluate: Callable = None, log_file_name: str = None
+    ):
         """Train the ENN for num_batches."""
         for _ in range(num_batches):
             self.step += 1
@@ -115,10 +123,16 @@ class Experiment(supervised_base.BaseExperiment):
 
                 if log_file_name is not None:
                     with open(log_file_name, "a") as f:
-                        f.write("step=" + str(loss_metrics["step"]) + " loss=" + str(float(loss_metrics["loss"])) + "\n")
+                        f.write(
+                            "step="
+                            + str(loss_metrics["step"])
+                            + " loss="
+                            + str(float(loss_metrics["loss"]))
+                            + "\n"
+                        )
 
             if evaluate is not None and self.step % self._eval_log_freq == 0:
-                if evaluate(): # KL started decreasing
+                if evaluate():  # KL started decreasing
                     return
 
             # Periodically evaluate the other datasets.
@@ -136,7 +150,7 @@ class Experiment(supervised_base.BaseExperiment):
                         }
                     )
                     self.logger.write(metrics)
-        
+
         return float(loss_metrics["loss"])
 
     def predict(self, inputs: base.Array, seed: int) -> base.Array:
@@ -148,13 +162,12 @@ class Experiment(supervised_base.BaseExperiment):
         return self._loss(self.state.params, batch, jax.random.PRNGKey(seed))
 
 
-
 class MultiIndexerExperiment(supervised_base.BaseExperiment):
     """Class to handle supervised training.
 
-  Optional eval_datasets which is a collection of datasets to *evaluate*
-  the loss on every eval_log_freq steps.
-  """
+    Optional eval_datasets which is a collection of datasets to *evaluate*
+    the loss on every eval_log_freq steps.
+    """
 
     def __init__(
         self,
@@ -167,7 +180,7 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
         train_log_freq: int = 1,
         eval_datasets: Optional[Dict[str, base.BatchIterator]] = None,
         eval_log_freq: int = 1,
-        indexers: Dict = {}
+        indexers: Dict = {},
     ):
         self.enn = enn
         self.dataset = dataset
@@ -180,12 +193,13 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
         self._eval_datasets = eval_datasets
         self._eval_log_freq = eval_log_freq
 
-
         def create_forward(indexer_id: str):
             indexer = indexers[indexer_id]
 
             def forward(
-                params: hk.Params, inputs: base.Array, key: base.RngKey,
+                params: hk.Params,
+                inputs: base.Array,
+                key: base.RngKey,
             ) -> base.Array:
                 index = indexer(key)
                 return self.enn.apply(params, inputs, index)
@@ -199,7 +213,9 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
 
         # Define the SGD step on the loss
         def sgd_step(
-            state: TrainingState, batch: base.Batch, key: base.RngKey,
+            state: TrainingState,
+            batch: base.Batch,
+            key: base.RngKey,
         ) -> Tuple[TrainingState, base.LossMetrics]:
             # Calculate the loss, metrics and gradients
             (loss, metrics), grads = jax.value_and_grad(self._loss, has_aux=True)(
@@ -208,7 +224,10 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
             metrics.update({"loss": loss})
             updates, new_opt_state = optimizer.update(grads, state.opt_state)
             new_params = optax.apply_updates(state.params, updates)
-            new_state = TrainingState(params=new_params, opt_state=new_opt_state,)
+            new_state = TrainingState(
+                params=new_params,
+                opt_state=new_opt_state,
+            )
             return new_state, metrics
 
         self._sgd_step = jax.jit(sgd_step)
@@ -223,7 +242,9 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
         self.logger = logger or loggers.make_default_logger("experiment", time_delta=0)
         self._train_log_freq = train_log_freq
 
-    def train(self, num_batches: int, evaluate: Callable = None, log_file_name: str = None):
+    def train(
+        self, num_batches: int, evaluate: Callable = None, log_file_name: str = None
+    ):
         """Train the ENN for num_batches."""
         for _ in range(num_batches):
             self.step += 1
@@ -240,10 +261,16 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
 
                 if log_file_name is not None:
                     with open(log_file_name, "a") as f:
-                        f.write("step=" + str(loss_metrics["step"]) + " loss=" + str(float(loss_metrics["loss"])) + "\n")
+                        f.write(
+                            "step="
+                            + str(loss_metrics["step"])
+                            + " loss="
+                            + str(float(loss_metrics["loss"]))
+                            + "\n"
+                        )
 
             if evaluate is not None and self.step % self._eval_log_freq == 0:
-                if evaluate(): # KL started decreasing
+                if evaluate():  # KL started decreasing
                     return
 
             # Periodically evaluate the other datasets.
@@ -261,12 +288,14 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
                         }
                     )
                     self.logger.write(metrics)
-        
+
         return float(loss_metrics["loss"])
 
     def predict(self, inputs: base.Array, seed: int, indexer_id: str) -> base.Array:
         """Evaluate the trained model at given inputs."""
-        return self.forwards[indexer_id](self.state.params, inputs, jax.random.PRNGKey(seed))
+        return self.forwards[indexer_id](
+            self.state.params, inputs, jax.random.PRNGKey(seed)
+        )
 
     def loss(self, batch: base.Batch, seed: int) -> base.Array:
         """Evaluate the loss for one batch of data."""
@@ -276,9 +305,9 @@ class MultiIndexerExperiment(supervised_base.BaseExperiment):
 class BatchedExperiment(supervised_base.BaseExperiment):
     """Class to handle supervised training.
 
-  Optional eval_datasets which is a collection of datasets to *evaluate*
-  the loss on every eval_log_freq steps.
-  """
+    Optional eval_datasets which is a collection of datasets to *evaluate*
+    the loss on every eval_log_freq steps.
+    """
 
     def __init__(
         self,
@@ -307,7 +336,10 @@ class BatchedExperiment(supervised_base.BaseExperiment):
         self._eval_log_freq = eval_log_freq
 
         def forward(
-            params: hk.Params, inputs: base.Array, key: base.RngKey, num_samples: int,
+            params: hk.Params,
+            inputs: base.Array,
+            key: base.RngKey,
+            num_samples: int,
         ) -> base.Array:
             index = self.enn.indexer.batched(key, num_samples)
             batched_apply = jax.vmap(self.enn.apply, in_axes=[None, None, 0])
@@ -315,17 +347,24 @@ class BatchedExperiment(supervised_base.BaseExperiment):
             return result
 
         def batched_forward(
-            params: hk.Params, inputs: base.Array, key: base.RngKey, num_samples: int,
+            params: hk.Params,
+            inputs: base.Array,
+            key: base.RngKey,
+            num_samples: int,
         ) -> base.Array:
             index = self.enn.indexer.batched(key, num_samples)
             result = self.enn.apply(params, inputs, index)
             return result
 
-        self._forward = jax.jit(batched_forward if self.batched_inference else forward, static_argnums=(3, ))
+        self._forward = jax.jit(
+            batched_forward if self.batched_inference else forward, static_argnums=(3,)
+        )
 
         # Define the SGD step on the loss
         def sgd_step(
-            state: TrainingState, batch: base.Batch, key: base.RngKey,
+            state: TrainingState,
+            batch: base.Batch,
+            key: base.RngKey,
         ) -> Tuple[TrainingState, base.LossMetrics]:
             # Calculate the loss, metrics and gradients
             (loss, metrics), grads = jax.value_and_grad(self._loss, has_aux=True)(
@@ -334,7 +373,10 @@ class BatchedExperiment(supervised_base.BaseExperiment):
             metrics.update({"loss": loss})
             updates, new_opt_state = optimizer.update(grads, state.opt_state)
             new_params = optax.apply_updates(state.params, updates)
-            new_state = TrainingState(params=new_params, opt_state=new_opt_state,)
+            new_state = TrainingState(
+                params=new_params,
+                opt_state=new_opt_state,
+            )
             return new_state, metrics
 
         self._sgd_step = jax.jit(sgd_step)
@@ -353,7 +395,9 @@ class BatchedExperiment(supervised_base.BaseExperiment):
         self.logger = logger or loggers.make_default_logger("experiment", time_delta=0)
         self._train_log_freq = train_log_freq
 
-    def train(self, num_batches: int, evaluate: Callable = None, log_file_name: str = None):
+    def train(
+        self, num_batches: int, evaluate: Callable = None, log_file_name: str = None
+    ):
         """Train the ENN for num_batches."""
         for _ in range(num_batches):
             self.step += 1
@@ -370,10 +414,16 @@ class BatchedExperiment(supervised_base.BaseExperiment):
 
                 if log_file_name is not None:
                     with open(log_file_name, "a") as f:
-                        f.write("step=" + str(loss_metrics["step"]) + " loss=" + str(float(loss_metrics["loss"])) + "\n")
+                        f.write(
+                            "step="
+                            + str(loss_metrics["step"])
+                            + " loss="
+                            + str(float(loss_metrics["loss"]))
+                            + "\n"
+                        )
 
             if evaluate is not None and self.step % self._eval_log_freq == 0:
-                if evaluate(): # KL started decreasing
+                if evaluate():  # KL started decreasing
                     return
 
             # Periodically evaluate the other datasets.
@@ -391,12 +441,14 @@ class BatchedExperiment(supervised_base.BaseExperiment):
                         }
                     )
                     self.logger.write(metrics)
-        
+
         return float(loss_metrics["loss"])
 
     def predict(self, inputs: base.Array, seed: int, num_samples: int) -> base.Array:
         """Evaluate the trained model at given inputs."""
-        return self._forward(self.state.params, inputs, jax.random.PRNGKey(seed), num_samples)
+        return self._forward(
+            self.state.params, inputs, jax.random.PRNGKey(seed), num_samples
+        )
 
     def loss(self, batch: base.Batch, seed: int) -> base.Array:
         """Evaluate the loss for one batch of data."""
@@ -406,9 +458,9 @@ class BatchedExperiment(supervised_base.BaseExperiment):
 class BatchedRankedExperiment(supervised_base.BaseExperiment):
     """Class to handle supervised training.
 
-  Optional eval_datasets which is a collection of datasets to *evaluate*
-  the loss on every eval_log_freq steps.
-  """
+    Optional eval_datasets which is a collection of datasets to *evaluate*
+    the loss on every eval_log_freq steps.
+    """
 
     def __init__(
         self,
@@ -436,9 +488,7 @@ class BatchedRankedExperiment(supervised_base.BaseExperiment):
         self._eval_datasets = eval_datasets
         self._eval_log_freq = eval_log_freq
 
-        def forward(
-            params: hk.Params, inputs: base.Array, samples
-        ) -> base.Array:
+        def forward(params: hk.Params, inputs: base.Array, samples) -> base.Array:
             batched_apply = jax.vmap(self.enn.apply, in_axes=[None, None, 0])
             result = batched_apply(params, inputs, samples)
             return result
@@ -453,7 +503,9 @@ class BatchedRankedExperiment(supervised_base.BaseExperiment):
 
         # Define the SGD step on the loss
         def sgd_step(
-            state: TrainingState, batch: base.Batch, key: base.RngKey,
+            state: TrainingState,
+            batch: base.Batch,
+            key: base.RngKey,
         ) -> Tuple[TrainingState, base.LossMetrics]:
             # Calculate the loss, metrics and gradients
             (loss, metrics), grads = jax.value_and_grad(self._loss, has_aux=True)(
@@ -462,7 +514,10 @@ class BatchedRankedExperiment(supervised_base.BaseExperiment):
             metrics.update({"loss": loss})
             updates, new_opt_state = optimizer.update(grads, state.opt_state)
             new_params = optax.apply_updates(state.params, updates)
-            new_state = TrainingState(params=new_params, opt_state=new_opt_state,)
+            new_state = TrainingState(
+                params=new_params,
+                opt_state=new_opt_state,
+            )
             return new_state, metrics
 
         self._sgd_step = jax.jit(sgd_step)
@@ -481,7 +536,9 @@ class BatchedRankedExperiment(supervised_base.BaseExperiment):
         self.logger = logger or loggers.make_default_logger("experiment", time_delta=0)
         self._train_log_freq = train_log_freq
 
-    def train(self, num_batches: int, evaluate: Callable = None, log_file_name: str = None):
+    def train(
+        self, num_batches: int, evaluate: Callable = None, log_file_name: str = None
+    ):
         """Train the ENN for num_batches."""
         for _ in range(num_batches):
             self.step += 1
@@ -498,10 +555,16 @@ class BatchedRankedExperiment(supervised_base.BaseExperiment):
 
                 if log_file_name is not None:
                     with open(log_file_name, "a") as f:
-                        f.write("step=" + str(loss_metrics["step"]) + " loss=" + str(float(loss_metrics["loss"])) + "\n")
+                        f.write(
+                            "step="
+                            + str(loss_metrics["step"])
+                            + " loss="
+                            + str(float(loss_metrics["loss"]))
+                            + "\n"
+                        )
 
             if evaluate is not None and self.step % self._eval_log_freq == 0:
-                if evaluate(): # KL started decreasing
+                if evaluate():  # KL started decreasing
                     return
 
             # Periodically evaluate the other datasets.
@@ -519,7 +582,7 @@ class BatchedRankedExperiment(supervised_base.BaseExperiment):
                         }
                     )
                     self.logger.write(metrics)
-        
+
         return float(loss_metrics["loss"])
 
     def predict(self, inputs: base.Array, samples) -> base.Array:

@@ -26,19 +26,21 @@ import jax.numpy as jnp
 
 
 def make_einsum_ensemble_mlp_enn(
-    output_sizes: Sequence[int], num_ensemble: int, nonzero_bias: bool = True,
+    output_sizes: Sequence[int],
+    num_ensemble: int,
+    nonzero_bias: bool = True,
 ) -> base.EpistemicNetwork:
     """Factory method to create fast einsum MLP ensemble ENN.
 
-  This is a specialized implementation for ReLU MLP without a prior network.
+    This is a specialized implementation for ReLU MLP without a prior network.
 
-  Args:
-    output_sizes: Sequence of integer sizes for the MLPs.
-    num_ensemble: Integer number of elements in the ensemble.
-    nonzero_bias: Whether to make the initial layer bias nonzero.
-  Returns:
-    EpistemicNetwork as an ensemble of MLP.
-  """
+    Args:
+      output_sizes: Sequence of integer sizes for the MLPs.
+      num_ensemble: Integer number of elements in the ensemble.
+      nonzero_bias: Whether to make the initial layer bias nonzero.
+    Returns:
+      EpistemicNetwork as an ensemble of MLP.
+    """
 
     def ensemble_forward(x: base.Array) -> base.OutputWithPrior:
         """Forwards the entire ensemble at given input x."""
@@ -72,17 +74,17 @@ def make_ensemble_mlp_with_prior_enn(
 ) -> base.EpistemicNetwork:
     """Factory method to create fast einsum MLP ensemble with matched prior.
 
-  Args:
-    output_sizes: Sequence of integer sizes for the MLPs.
-    dummy_input: Example x input for prior initialization.
-    num_ensemble: Integer number of elements in the ensemble.
-    prior_scale: Float rescaling of the prior MLP.
-    nonzero_bias: Whether to make the initial layer bias nonzero.
-    seed: integer seed for prior init.
+    Args:
+      output_sizes: Sequence of integer sizes for the MLPs.
+      dummy_input: Example x input for prior initialization.
+      num_ensemble: Integer number of elements in the ensemble.
+      prior_scale: Float rescaling of the prior MLP.
+      nonzero_bias: Whether to make the initial layer bias nonzero.
+      seed: integer seed for prior init.
 
-  Returns:
-    EpistemicNetwork ENN of the ensemble of MLP with matches prior.
-  """
+    Returns:
+      EpistemicNetwork ENN of the ensemble of MLP with matches prior.
+    """
 
     enn = make_einsum_ensemble_mlp_enn(output_sizes, num_ensemble, nonzero_bias)
     init_key, _ = jax.random.split(jax.random.PRNGKey(seed))
@@ -96,7 +98,9 @@ def make_ensemble_mlp_with_prior_enn(
         ensemble_prior = enn.apply(prior_params, x, z) * prior_scale
         return base.OutputWithPrior(train=ensemble_train, prior=ensemble_prior)
 
-    return base.EpistemicNetwork(apply_with_prior, enn.init, enn.indexer)
+    result = base.EpistemicNetwork(apply_with_prior, enn.init, enn.indexer)
+    result.prior_params = prior_params
+    return result
 
 
 ################################################################################
@@ -155,9 +159,9 @@ class EnsembleLinear(hk.Module):
 class EnsembleMLP(hk.Module):
     """Parallel num_ensemble MLPs all with same output_sizes.
 
-  In the first layer, the input is 'branched' to num_ensemble linear layers.
-  Then, in subsequent layers it is purely parallel EnsembleLinear.
-  """
+    In the first layer, the input is 'branched' to num_ensemble linear layers.
+    Then, in subsequent layers it is purely parallel EnsembleLinear.
+    """
 
     def __init__(
         self,

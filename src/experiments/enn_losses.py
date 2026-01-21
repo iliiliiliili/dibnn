@@ -16,11 +16,11 @@
 # ============================================================================
 """Helpful losses for the ENN agent - PyTorch version."""
 
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
-from src import base as enn_base, utils
+from src import base as enn_base, data_noise, utils
 from src import losses
 from src.experiments import base as testbed_base
 
@@ -37,21 +37,49 @@ LossCtor = Callable[
 ]
 
 
+
 def gaussian_regression_loss(
     num_index_samples: int,
     noise_scale: float = 1,
     l2_weight_decay: float = 0,
     exclude_bias_l2: bool = True,
 ) -> LossCtor:
-    """Constructs a loss for Gaussian regression."""
+    """Add a matching Gaussian noise to the target y."""
 
     def loss_ctor(
         prior: testbed_base.PriorKnowledge, enn: enn_base.EpistemicNetwork
     ) -> enn_base.LossFn:
         """Add a matching Gaussian noise to the target y."""
-        single_loss = losses.L2Loss()
-        loss_fn = losses.average_single_index_loss(single_loss, num_index_samples)
-        return loss_fn
+        noise_std = noise_scale * prior.noise_std
+        noise_fn = data_noise.GaussianTargetNoise(enn, noise_std)
+        loss_fn = losses.add_data_noise(losses.L2Loss(), noise_fn)
+        if l2_weight_decay != 0:
+            if exclude_bias_l2:
+                predicate = lambda module, name, value: name != "b"
+            else:
+                predicate = lambda module, name, value: True
+            loss_fn = add_l2_weight_decay(loss_fn, l2_weight_decay, predicate)
+        
+
+        def apply_loss(
+            enn: enn_base.EpistemicNetwork,
+            model: nn.Module,
+            batch: enn_base.Batch,
+            key: enn_base.RngKey,
+            device: str,
+            correlated_index: bool = False,
+            replace_indices = None
+        ) -> Tuple[torch.Tensor, enn_base.LossMetrics]:
+
+            if replace_indices is not None:
+                indices = replace_indices
+            else:
+                indices = enn.indexer.batched(key, num_index_samples, device, correlated_index)
+
+            loss, metrics = loss_fn(enn.apply, model, batch, indices)
+            return loss, metrics
+
+        return apply_loss
 
     return loss_ctor
 
@@ -76,27 +104,28 @@ def regularized_dropout_loss(
     return loss_ctor
 
 
-def get_awgn_loglike_fn(sigma_w: float) -> Callable[[enn_base.Output, enn_base.Batch], float]:
+def get_awgn_loglike_fn(
+    sigma_w: float,
+) -> Callable[[enn_base.Output, enn_base.Batch], float]:
     """Returns a function that computes the simple unnormalized log likelihood.
 
-  It assumes response variable is perturbed with additive iid Gaussian noise.
+    It assumes response variable is perturbed with additive iid Gaussian noise.
 
-  Args:
-    sigma_w: standard deviation of the additive Gaussian noise.
+    Args:
+      sigma_w: standard deviation of the additive Gaussian noise.
 
-  Returns:
-    A function that computes the log likelihood given data and output.
+    Returns:
+      A function that computes the log likelihood given data and output.
 
-  """
+    """
 
     def log_likelihood_fn(out: enn_base.Output, batch: enn_base.Batch):
         net_out = utils.parse_net_output(out)
         err_sq = torch.mean(torch.square(net_out - batch.y))
-        result = -0.5 * err_sq / sigma_w ** 2
+        result = -0.5 * err_sq / sigma_w**2
         return result
 
     return log_likelihood_fn
-
 
 
 def create_bbb_nelbo_loss(
@@ -107,42 +136,42 @@ def create_bbb_nelbo_loss(
 ) -> single_index.NElboLoss:
     """Returns the negative ELBO for bbb.
 
-  Args:
-    log_likelihood_fn: log likelihood function.
-    sigma_0: Standard deviation of the Gaussian latent (params) prior.
-    num_samples: effective number of samples.
-  Returns:
-    Negative ELBO value.
-  """
+    Args:
+      log_likelihood_fn: log likelihood function.
+      sigma_0: Standard deviation of the Gaussian latent (params) prior.
+      num_samples: effective number of samples.
+    Returns:
+      Negative ELBO value.
+    """
 
-    def model_prior_kl_fn(
-        out: enn_base.Output, model, index: enn_base.Index
-    ) -> float:
+    def model_prior_kl_fn(out: enn_base.Output, model, index: enn_base.Index) -> float:
         """Compute the KL distance between model and prior densities in a linear HM.
 
-    weights `w` and biases `b` are assumed included in `params`. The latent
-    variables (which are the parameters of the base network) are generated as u
-    = z @ w + b where z is the index variable. The index is assumed Gaussian
-    *with variance equal to the prior variance* of the latent variables.
+        weights `w` and biases `b` are assumed included in `params`. The latent
+        variables (which are the parameters of the base network) are generated as u
+        = z @ w + b where z is the index variable. The index is assumed Gaussian
+        *with variance equal to the prior variance* of the latent variables.
 
-    This function also  assumes a Gaussian prior distribution for the latent,
-    i.e., parameters of the base network.
+        This function also  assumes a Gaussian prior distribution for the latent,
+        i.e., parameters of the base network.
 
-    Args:
-      out: final output of the hypermodel, i.e., y = f_theta(x, z)
-      params: parameters of the hypermodel (Note that this is the parameters of
-        the hyper network since base network params are set by the hyper net.)
-      index: index z
+        Args:
+          out: final output of the hypermodel, i.e., y = f_theta(x, z)
+          params: parameters of the hypermodel (Note that this is the parameters of
+            the hyper network since base network params are set by the hyper net.)
+          index: index z
 
-    Returns:
-      KL distance.
-    """
+        Returns:
+          KL distance.
+        """
 
         del out, index  # Here we compute the log prob from params directly.
 
         result = 0.0
 
-        all_weight_sigmas, all_bias_sigmas, all_weight_mus, all_bias_mus = model.get_params_tuple()
+        all_weight_sigmas, all_bias_sigmas, all_weight_mus, all_bias_mus = (
+            model.get_params_tuple()
+        )
 
         for layer in range(len(all_weight_sigmas)):
 
@@ -159,7 +188,7 @@ def create_bbb_nelbo_loss(
                 / num_samples
                 * (
                     torch.sum(torch.square(weight_scales))
-                    + torch.sum(torch.square(weight_mus)) / (sigma_0 ** 2)
+                    + torch.sum(torch.square(weight_mus)) / (sigma_0**2)
                     - np.prod(weight_mus.shape)
                     - 2 * torch.sum(torch.log(weight_scales))
                 )
@@ -170,7 +199,7 @@ def create_bbb_nelbo_loss(
                 / num_samples
                 * (
                     torch.sum(torch.square(bias_scales))
-                    + torch.sum(torch.square(bias_mus)) / (sigma_0 ** 2)
+                    + torch.sum(torch.square(bias_mus)) / (sigma_0**2)
                     - np.prod(bias_mus.shape)
                     - 2 * torch.sum(torch.log(bias_scales))
                 )
@@ -188,19 +217,21 @@ def create_bbb_nelbo_loss(
             #         - (len(weight_mus) + len(bias_mus))
             #         - 2 * torch.sum(torch.log(weight_scales))
             #         - 2 * torch.sum(torch.log(bias_scales))
-                
+
             # )
 
             # result += layer_kl
-        
+
         # result = 0.5 / num_samples * result
         return result
 
     return single_index.NElboLoss(
-        log_likelihood_fn=log_likelihood_fn, model_prior_kl_fn=model_prior_kl_fn, num_index_samples=num_index_samples
+        log_likelihood_fn=log_likelihood_fn,
+        model_prior_kl_fn=model_prior_kl_fn,
+        num_index_samples=num_index_samples,
     )
 
-    
+
 def bbb_loss(sigma_0: float = 100, num_index_samples: int = 64):
     """Constructs the loss function for bbb agent."""
 
@@ -218,11 +249,11 @@ def bbb_loss(sigma_0: float = 100, num_index_samples: int = 64):
         #     num_index_samples=num_index_samples,
         # )
         loss_fn = create_bbb_nelbo_loss(
-                log_likelihood_fn=log_likelihood_fn,
-                sigma_0=sigma_0,
-                num_samples=prior.num_train,
-                num_index_samples=num_index_samples,
-            )
+            log_likelihood_fn=log_likelihood_fn,
+            sigma_0=sigma_0,
+            num_samples=prior.num_train,
+            num_index_samples=num_index_samples,
+        )
         return loss_fn
 
     return loss_ctor

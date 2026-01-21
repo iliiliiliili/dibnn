@@ -129,7 +129,10 @@ def main(_):
 
                     # Evaluate the quality of the ENN sampler after training
                     enn_sampler = agent(
-                        problem.train_data, problem.prior_knowledge, problem.evaluate_quality, log_file_name
+                        problem.train_data,
+                        problem.prior_knowledge,
+                        problem.evaluate_quality,
+                        log_file_name,
                     )
                     kl_quality = problem.evaluate_quality(enn_sampler)
                     print(

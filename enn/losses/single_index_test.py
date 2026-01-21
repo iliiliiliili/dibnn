@@ -33,10 +33,10 @@ import numpy as np
 class DummySingleIndexLossFn(single_index.SingleIndexLossFn):
     """A dummy loss fn that returns the normalized index as loss.
 
-  It also returns a constant dummy metrics. It is meant to be used with an
-  ensemble ENN. The index is assumed a uniform random integer in the interval
-  [0, num_ensemble). The loss is normalized such that its mean is 1.
-  """
+    It also returns a constant dummy metrics. It is meant to be used with an
+    ensemble ENN. The index is assumed a uniform random integer in the interval
+    [0, num_ensemble). The loss is normalized such that its mean is 1.
+    """
 
     def __init__(self, num_ensemble: int, dummy_metrics: Dict[Text, int]):
         self._num_ensemble = num_ensemble
@@ -59,7 +59,10 @@ class AvgSingleIndexLossTest(absltest.TestCase):
         """Average of single loss fn should have same mean and smaller variance ."""
 
         num_ensemble = 10
-        enn = networks.MLPEnsembleEnn(output_sizes=[1], num_ensemble=num_ensemble,)
+        enn = networks.MLPEnsembleEnn(
+            output_sizes=[1],
+            num_ensemble=num_ensemble,
+        )
 
         dummy_metrics = {"a": 0, "b": 1}
         # A dummy loss fn that returns the normalized index as loss and two constant
@@ -208,14 +211,15 @@ class ElboLossTest(absltest.TestCase):
     def test_elbo_loss(self):
         """Compute the ELBO for some trivial loglikelihood and prior kl.
 
-    There is a dummy log_likelihood_fn that just returns the first argument
-    (out). and a dummy model_prior_kl_fn that returns 0. The elbo loss is equal
-    to model_prior_kl minus log_likelihood and hence should be -out.
-    """
+        There is a dummy log_likelihood_fn that just returns the first argument
+        (out). and a dummy model_prior_kl_fn that returns 0. The elbo loss is equal
+        to model_prior_kl minus log_likelihood and hence should be -out.
+        """
 
         batch_size = 4
         batch = base.Batch(
-            x=np.expand_dims(np.arange(batch_size), 1), y=np.arange(batch_size),
+            x=np.expand_dims(np.arange(batch_size), 1),
+            y=np.arange(batch_size),
         )
         params = dict()
         apply = lambda p, x, i: x[:, 0]

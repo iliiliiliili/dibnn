@@ -53,17 +53,13 @@ def create_initializer(names):
             init = hk.initializers.VarianceScaling(2.0, "fan_in", "uniform")
             result.append((init, init))
         elif name == "he_normal":
-            init = hk.initializers.VarianceScaling(
-                2.0, "fan_in", "truncated_normal"
-            )
+            init = hk.initializers.VarianceScaling(2.0, "fan_in", "truncated_normal")
             result.append((init, init))
         elif name == "glorot_normal":
             init = hk.initializers.VarianceScaling(1.0, "fan_avg", "uniform")
             result.append((init, init))
         elif name == "glorot_uniform":
-            init = hk.initializers.VarianceScaling(
-                1.0, "fan_avg", "truncated_normal"
-            )
+            init = hk.initializers.VarianceScaling(1.0, "fan_avg", "truncated_normal")
             result.append((init, init))
         elif name == "1":
             init = hk.initializers.Constant(1.0)
@@ -194,15 +190,18 @@ class VariationalBase(hk.Module):
                 if len(activation_targets) == 1:
                     current_activation: Activation = self.activation  # type: ignore
                 else:
-                    current_activation: Activation = self.activation[  # type: ignore
-                        i
-                    ]
+                    current_activation: Activation = self.activation[i]  # type: ignore
 
                 if target == "mean":
                     means = hk.Sequential([means, current_activation])
                 elif target == "std":
                     if stds is not None:
-                        stds = hk.Sequential([stds, current_activation,])
+                        stds = hk.Sequential(
+                            [
+                                stds,
+                                current_activation,
+                            ]
+                        )
                 elif target == "end":
                     end_activation = current_activation
                 elif target == "none":
@@ -365,9 +364,7 @@ class VariationalLinear_S(hk.Module):
         super().__init__()
 
     def __call__(self, x, index):
-        means = hk.Linear(
-            self.out_features, with_bias=self.bias, **self.kwargs
-        )
+        means = hk.Linear(self.out_features, with_bias=self.bias, **self.kwargs)
         stds = hk.Linear(self.out_features, with_bias=self.bias, **self.kwargs)
 
         result = means(x) + stds(x) * index
@@ -451,13 +448,9 @@ class MLPVariationalENN(base.EpistemicNetwork):
 
         index_dim = sum(output_sizes)
 
-        indexer = indexers.ScaledGaussianIndexer(
-            index_dim, jnp.sqrt(index_dim)
-        )
+        indexer = indexers.ScaledGaussianIndexer(index_dim, jnp.sqrt(index_dim))
 
-        def apply(
-            params: hk.Params, x: base.Array, z: base.Index
-        ) -> base.Output:
+        def apply(params: hk.Params, x: base.Array, z: base.Index) -> base.Output:
             net_out = transformed.apply(params, x, z)
             return net_out
 
@@ -525,13 +518,9 @@ class MLPVariationalENN_O(base.EpistemicNetwork):
 
         index_dim = sum(output_sizes)
 
-        indexer = indexers.ScaledGaussianIndexer(
-            index_dim, jnp.sqrt(index_dim)
-        )
+        indexer = indexers.ScaledGaussianIndexer(index_dim, jnp.sqrt(index_dim))
 
-        def apply(
-            params: hk.Params, x: base.Array, z: base.Index
-        ) -> base.Output:
+        def apply(params: hk.Params, x: base.Array, z: base.Index) -> base.Output:
             net_out = transformed.apply(params, x, z)
             return net_out
 

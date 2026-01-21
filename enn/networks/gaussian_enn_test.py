@@ -38,7 +38,8 @@ class GaussianEnnTest(parameterized.TestCase):
         test_experiment = supervised.make_test_experiment(regression)
 
         enn = gaussian_enn.GaussianNoiseMLP(
-            output_sizes=hiddens + [test_experiment.num_outputs], init_scale=init_scale,
+            output_sizes=hiddens + [test_experiment.num_outputs],
+            init_scale=init_scale,
         )
         experiment = test_experiment.experiment_ctor(enn)
         experiment.train(10)

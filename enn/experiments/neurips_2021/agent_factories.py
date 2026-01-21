@@ -81,7 +81,7 @@ def make_subsample_ensemble_ctor(
     inference_samples: List[int] = ["full"],
 ) -> ConfigCtor:
     """Generate an ensemble agent config."""
-    
+
     def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
         output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
         return networks.make_ensemble_mlp_with_prior_enn(
@@ -131,7 +131,9 @@ def make_layer_ensemble_ctor(
         return agents.VanillaEnnConfig(
             enn_ctor=make_enn,
             loss_ctor=enn_losses.gaussian_regression_loss(
-                reduce(lambda x, y: x * y, num_ensembles), noise_scale, l2_weight_decay=0
+                reduce(lambda x, y: x * y, num_ensembles),
+                noise_scale,
+                l2_weight_decay=0,
             ),
             num_batches=1000,  # Irrelevant for bandit
             logger=loggers.make_default_logger("experiment", time_delta=0),
@@ -154,7 +156,10 @@ def make_layer_ensemble_cor_ctor(
 
     num_samples = reduce(lambda x, y: x * y, num_ensembles)
 
-    inference_samples = [(int(x) * num_ensembles[0] if x != "full" else num_samples) for x in inference_samples]
+    inference_samples = [
+        (int(x) * num_ensembles[0] if x != "full" else num_samples)
+        for x in inference_samples
+    ]
 
     def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
         output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
@@ -271,7 +276,10 @@ def make_true_layer_ensemble_einsum_ctor(
 
     num_samples = reduce(lambda x, y: x * y, num_ensembles)
 
-    inference_samples = [(int(x) * num_ensembles[0] if x != "full" else num_samples) for x in inference_samples]
+    inference_samples = [
+        (int(x) * num_ensembles[0] if x != "full" else num_samples)
+        for x in inference_samples
+    ]
 
     def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
         output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
@@ -373,14 +381,17 @@ def make_vnn_ctor(
     initializer: Tuple[str, str] = (None, None),
     loss_function: float = "default",
     noise_scale: float = 1,
-    sigma_0 = 100,
+    sigma_0=100,
 ) -> ConfigCtor:
     """Generate a dropout agent config."""
 
     def get_cosine_lr_scheduler(init_lr, final_lr, n_epoch=1000):
         import numpy as np
+
         def lr_scheduler(epoch_idx):
-            lr = final_lr + 0.5 * (init_lr - final_lr) * (1 + jnp.cos(jnp.pi * epoch_idx / n_epoch))
+            lr = final_lr + 0.5 * (init_lr - final_lr) * (
+                1 + jnp.cos(jnp.pi * epoch_idx / n_epoch)
+            )
             return lr
 
         return lr_scheduler
@@ -402,7 +413,7 @@ def make_vnn_ctor(
         """Factory method to create agent_config, swap this for different agents."""
 
         if loss_function == "default":
-            loss_ctor=enn_losses.default_enn_loss(
+            loss_ctor = enn_losses.default_enn_loss(
                 num_index_samples=num_index_samples,
                 distribution="exponential",
             )
@@ -416,14 +427,18 @@ def make_vnn_ctor(
             )
         else:
             raise ValueError(loss_function + "is an unknown loss_function")
-        
+
         return agents.VanillaEnnConfig(
             enn_ctor=make_enn,
             loss_ctor=loss_ctor,
             num_batches=num_batches,  # Irrelevant for bandit
             logger=loggers.make_default_logger("experiment", time_delta=0),
             seed=seed,
-            optimizer=optax.adam(get_cosine_lr_scheduler(learning_rate, learning_rate * 1e-3, num_batches)),
+            optimizer=optax.adam(
+                get_cosine_lr_scheduler(
+                    learning_rate, learning_rate * 1e-3, num_batches
+                )
+            ),
         )
 
     return make_agent_config
@@ -519,7 +534,7 @@ def make_ensemble_sweep() -> List[AgentCtorConfig]:
 
     # Adding reasonably interesting ensemble agents
     for num_ensemble in [3, 10, 30]:
-    # for num_ensemble in [1, 3, 10, 30]:
+        # for num_ensemble in [1, 3, 10, 30]:
         for noise_scale in [0, 1]:
             for prior_scale in [0, 1]:
                 for num_layers in [2, 3]:
@@ -542,6 +557,7 @@ def make_ensemble_sweep() -> List[AgentCtorConfig]:
                         sweep.append(AgentCtorConfig(settings, config_ctor))
 
     return sweep
+
 
 def make_subsample_ensemble_sweep() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
@@ -690,7 +706,6 @@ def make_layer_ensemble_einsum_cor_sweep() -> List[AgentCtorConfig]:
                         sweep.append(AgentCtorConfig(settings, config_ctor))
 
     return sweep
-
 
 
 def make_true_layer_ensemble_einsum_cor_sweep() -> List[AgentCtorConfig]:
@@ -844,6 +859,7 @@ def make_bbb_sweep() -> List[AgentCtorConfig]:
 
     return sweep
 
+
 def make_bbb_debug() -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
@@ -876,7 +892,13 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
         for learning_rate in [1e-3, 1e-4, 5e-5]:
             for num_layers in [2, 3]:
                 for hidden_size in [50, 100]:
-                    for activation_mode in ["mean", "mean+std", "mean+end", "end", "none"]:
+                    for activation_mode in [
+                        "mean",
+                        "mean+std",
+                        "mean+end",
+                        "end",
+                        "none",
+                    ]:
                         for use_batch_norm in [False]:
                             for global_std_mode in ["none", "replace", "multiply"]:
                                 for num_index_samples in [10, 100]:
@@ -890,7 +912,9 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
                                         }[activation]
 
                                         if len(activation_mode.split("+")) > 1:
-                                            current_activation = [current_activation] * len(activation_mode.split("+"))
+                                            current_activation = [
+                                                current_activation
+                                            ] * len(activation_mode.split("+"))
 
                                         settings = {
                                             "agent": "vnn",
@@ -906,10 +930,18 @@ def make_vnn_sweep() -> List[AgentCtorConfig]:
                                             "num_index_samples": num_index_samples,
                                         }
                                         config_ctor = make_vnn_ctor(
-                                            current_activation, activation_mode, use_batch_norm, batch_norm_mode,
-                                            global_std_mode, num_index_samples, hidden_size, num_batches=num_batches
+                                            current_activation,
+                                            activation_mode,
+                                            use_batch_norm,
+                                            batch_norm_mode,
+                                            global_std_mode,
+                                            num_index_samples,
+                                            hidden_size,
+                                            num_batches=num_batches,
                                         )
-                                        sweep.append(AgentCtorConfig(settings, config_ctor))
+                                        sweep.append(
+                                            AgentCtorConfig(settings, config_ctor)
+                                        )
 
     return sweep
 
@@ -926,8 +958,10 @@ def make_vnn_selected_sweep() -> List[AgentCtorConfig]:
                         for num_batches in [1000, 3000]:
                             for num_index_samples in [10, 100]:
                                 for activation_mode, global_std_mode in [
-                                    ("mean", "multiply"), ("mean+end", "multiply"),
-                                    ("mean+end", "replace"), ("none", "multiply"),
+                                    ("mean", "multiply"),
+                                    ("mean+end", "multiply"),
+                                    ("mean+end", "replace"),
+                                    ("none", "multiply"),
                                     ("none", "none"),
                                 ]:
 
@@ -939,7 +973,9 @@ def make_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                     }[activation]
 
                                     if len(activation_mode.split("+")) > 1:
-                                        current_activation = [current_activation] * len(activation_mode.split("+"))
+                                        current_activation = [current_activation] * len(
+                                            activation_mode.split("+")
+                                        )
 
                                     settings = {
                                         "agent": "vnn",
@@ -955,8 +991,14 @@ def make_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                         "num_index_samples": num_index_samples,
                                     }
                                     config_ctor = make_vnn_ctor(
-                                        current_activation, activation_mode, use_batch_norm, batch_norm_mode,
-                                        global_std_mode, num_index_samples, hidden_size, num_batches=num_batches
+                                        current_activation,
+                                        activation_mode,
+                                        use_batch_norm,
+                                        batch_norm_mode,
+                                        global_std_mode,
+                                        num_index_samples,
+                                        hidden_size,
+                                        num_batches=num_batches,
                                     )
                                     sweep.append(AgentCtorConfig(settings, config_ctor))
     return sweep
@@ -974,8 +1016,10 @@ def make_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                         for num_batches in [1000, 3000]:
                             for num_index_samples in [10, 100]:
                                 for activation_mode, global_std_mode in [
-                                    ("mean", "multiply"), ("mean+end", "multiply"),
-                                    ("mean+end", "replace"), ("none", "multiply"),
+                                    ("mean", "multiply"),
+                                    ("mean+end", "multiply"),
+                                    ("mean+end", "replace"),
+                                    ("none", "multiply"),
                                     ("none", "none"),
                                 ]:
 
@@ -988,7 +1032,9 @@ def make_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                     }[activation]
 
                                     if len(activation_mode.split("+")) > 1:
-                                        current_activation = [current_activation] * len(activation_mode.split("+"))
+                                        current_activation = [current_activation] * len(
+                                            activation_mode.split("+")
+                                        )
 
                                     settings = {
                                         "agent": "vnn",
@@ -1004,8 +1050,14 @@ def make_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                         "num_index_samples": num_index_samples,
                                     }
                                     config_ctor = make_vnn_ctor(
-                                        current_activation, activation_mode, use_batch_norm, batch_norm_mode,
-                                        global_std_mode, num_index_samples, hidden_size, num_batches=num_batches
+                                        current_activation,
+                                        activation_mode,
+                                        use_batch_norm,
+                                        batch_norm_mode,
+                                        global_std_mode,
+                                        num_index_samples,
+                                        hidden_size,
+                                        num_batches=num_batches,
                                     )
                                     sweep.append(AgentCtorConfig(settings, config_ctor))
     return sweep
@@ -1023,8 +1075,10 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                         for num_batches in [1000]:
                             for num_index_samples in [100, 300]:
                                 for activation_mode, global_std_mode in [
-                                    ("mean", "none"), ("mean+end", "none"),
-                                    ("mean+end", "replace"), ("none", "none"),
+                                    ("mean", "none"),
+                                    ("mean+end", "none"),
+                                    ("mean+end", "replace"),
+                                    ("none", "none"),
                                 ]:
                                     for initializer in [
                                         [None, None],
@@ -1048,7 +1102,9 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                             }[activation]
 
                                             if len(activation_mode.split("+")) > 1:
-                                                current_activation = [current_activation] * len(activation_mode.split("+"))
+                                                current_activation = [
+                                                    current_activation
+                                                ] * len(activation_mode.split("+"))
 
                                             settings = {
                                                 "agent": "vnn_init",
@@ -1062,18 +1118,27 @@ def make_initialization_lrelu_vnn_selected_sweep() -> List[AgentCtorConfig]:
                                                 "global_std_mode": global_std_mode,
                                                 "num_batches": num_batches,
                                                 "num_index_samples": num_index_samples,
-                                                "initializer": "+".join(map(str, initializer)),
+                                                "initializer": "+".join(
+                                                    map(str, initializer)
+                                                ),
                                                 "loss_function": loss_function,
                                             }
                                             config_ctor = make_vnn_ctor(
-                                                current_activation, activation_mode, use_batch_norm, batch_norm_mode,
-                                                global_std_mode, num_index_samples, hidden_size, num_batches=num_batches,
-                                                initializer=initializer, loss_function=loss_function,
+                                                current_activation,
+                                                activation_mode,
+                                                use_batch_norm,
+                                                batch_norm_mode,
+                                                global_std_mode,
+                                                num_index_samples,
+                                                hidden_size,
+                                                num_batches=num_batches,
+                                                initializer=initializer,
+                                                loss_function=loss_function,
                                             )
-                                            sweep.append(AgentCtorConfig(settings, config_ctor))
+                                            sweep.append(
+                                                AgentCtorConfig(settings, config_ctor)
+                                            )
     return sweep
-
-
 
 
 def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:

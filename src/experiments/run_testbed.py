@@ -26,6 +26,7 @@ import os
 import torch
 from src import torch_repr
 
+
 def main(
     input_dim=(1, 10, 100),
     data_ratio=(1.0, 10.0, 100.0),
@@ -37,6 +38,7 @@ def main(
     experiment_group="",
     device="cuda:0",
     results_folder="results",
+    use_double_precision=False,
 ):
     """Run testbed sweep.
 
@@ -70,6 +72,7 @@ def main(
                     data_ratio=dr,
                     seed=seed,
                     noise_std=ns,
+                    use_double_precision=use_double_precision,
                 )
 
                 all_results = []
@@ -98,7 +101,7 @@ def main(
                     print("agent_id", agent_id, "of", len(sweep))
 
                     # Form the appropriate agent for training
-                    agent = agents.VanillaEnnAgent(agent_config.config_ctor())
+                    agent = agents.VanillaEnnAgent(agent_config.config_ctor(), use_double_precision=use_double_precision)
 
                     train_seed, evaluation_seed = split_seed(agent_seed, 2)
 
@@ -111,7 +114,9 @@ def main(
                     )
 
                     # Evaluate the quality of the ENN sampler after training
-                    kl_quality = problem.evaluate_quality(enn_sampler, seed=evaluation_seed, device=device)
+                    kl_quality = problem.evaluate_quality(
+                        enn_sampler, seed=evaluation_seed, device=device
+                    )
                     print(
                         f"kl_estimate={kl_quality.kl_estimate}"
                         + " mean_error="

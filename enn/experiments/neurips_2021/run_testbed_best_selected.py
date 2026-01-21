@@ -18,6 +18,7 @@
 
 from absl import app
 from absl import flags
+
 # from jax.interpreters.xla import primitive_uses_outfeed
 from enn.experiments.neurips_2021 import agent_factories
 from enn.experiments.neurips_2021 import agents
@@ -37,7 +38,9 @@ flags.DEFINE_multi_float(
     "noise_std", [0.01, 0.1, 1.0], "Additive noise standard deviation."
 )
 # flags.DEFINE_multi_integer("seed", [1], "Seeds for testbed problem.")
-flags.DEFINE_multi_integer("seed", [1, 2, 6, 0, 5, 17, 12, 260, 19, 98], "Seeds for testbed problem.")
+flags.DEFINE_multi_integer(
+    "seed", [1, 2, 6, 0, 5, 17, 12, 260, 19, 98], "Seeds for testbed problem."
+)
 
 
 # ENN agent
@@ -78,7 +81,7 @@ def main(_):
 
     os.makedirs("results-jax", exist_ok=True)
     os.makedirs("single_runs", exist_ok=True)
-    
+
     print("Best Selected Run")
 
     for k in ["input_dim", "data_ratio", "noise_std", "experiment_group"]:
@@ -99,7 +102,6 @@ def main(_):
                         noise_std=noise_std,
                     )
 
-                    
                     print("Created problem for seed", seed)
 
                     problems[seed] = problem
@@ -156,7 +158,10 @@ def main(_):
 
                         # Evaluate the quality of the ENN sampler after training
                         enn_sampler = agent(
-                            problem.train_data, problem.prior_knowledge, problem.evaluate_quality_val, log_file_name
+                            problem.train_data,
+                            problem.prior_knowledge,
+                            problem.evaluate_quality_val,
+                            log_file_name,
                         )
                         kl_quality = problem.evaluate_quality(enn_sampler)
                         # kl_quality = agent.best_kl
@@ -186,8 +191,15 @@ def main(_):
                         "a",
                     ) as f:
 
-                        kl_mean = sum([kl_quality.kl_estimate for kl_quality in kls]) / len(kls)
-                        kl_variance = sum([(kl_quality.kl_estimate - kl_mean) ** 2 for kl_quality in kls]) / len(kls)
+                        kl_mean = sum(
+                            [kl_quality.kl_estimate for kl_quality in kls]
+                        ) / len(kls)
+                        kl_variance = sum(
+                            [
+                                (kl_quality.kl_estimate - kl_mean) ** 2
+                                for kl_quality in kls
+                            ]
+                        ) / len(kls)
 
                         f.write(
                             str(agent_id)
@@ -198,10 +210,26 @@ def main(_):
                             + str(kl_variance)
                             + " "
                             + "mean_error="
-                            + str(sum([kl_quality.extra["mean_error"] for kl_quality in kls]) / len(kls))
+                            + str(
+                                sum(
+                                    [
+                                        kl_quality.extra["mean_error"]
+                                        for kl_quality in kls
+                                    ]
+                                )
+                                / len(kls)
+                            )
                             + " "
                             + "std_error="
-                            + str(sum([kl_quality.extra["std_error"] for kl_quality in kls]) / len(kls))
+                            + str(
+                                sum(
+                                    [
+                                        kl_quality.extra["std_error"]
+                                        for kl_quality in kls
+                                    ]
+                                )
+                                / len(kls)
+                            )
                             + " "
                             + " ".join(
                                 [

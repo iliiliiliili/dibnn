@@ -69,11 +69,11 @@ class GPRegression:
         if compute:
 
             # Form the training data
-            mean = torch.zeros(num_train)
+            mean = torch.zeros(num_train, dtype = self._x_train.dtype)
             k_train_train = kernel_fn(self._x_train, x2=None, get="nngp")
-            k_train_train = k_train_train + kernel_ridge * torch.eye(num_train)
+            k_train_train = k_train_train + kernel_ridge * torch.eye(num_train, dtype = self._x_train.dtype)
             y_function = MultivariateNormal(mean, k_train_train).sample()
-            y_noise = torch.randn(num_train, 1) * noise_std
+            y_noise = torch.randn(num_train, 1, dtype = self._x_train.dtype) * noise_std
             y_train = y_function[:, None] + y_noise
             self._train_data = Data(self._x_train, y_train)
             assert y_train.shape == torch.Size([num_train, 1])
@@ -176,7 +176,11 @@ class TestbedGPRegression(TestbedProblem):
         return self.prior
 
     def evaluate_quality(
-        self, enn_sampler: EpistemicSampler, seed, num_samples=None, device: str = "cuda:0"
+        self,
+        enn_sampler: EpistemicSampler,
+        seed,
+        num_samples=None,
+        device: str = "cuda:0",
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
         num_samples = self.num_enn_samples if num_samples is None else num_samples

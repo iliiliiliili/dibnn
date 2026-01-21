@@ -144,7 +144,9 @@ class LayerEnsembleNetworkWithPriors(base.EpistemicNetwork):
 
 
 def init_module(
-    net_fn, dummy_input: base.Array, rng: int = 0,
+    net_fn,
+    dummy_input: base.Array,
+    rng: int = 0,
 ) -> Sequence[Callable[[base.Array], base.Array]]:
     transformed = hk.without_apply_rng(hk.transform(net_fn))
     params = transformed.init(next(rng), dummy_input)
@@ -226,9 +228,9 @@ class LayerEnsembleLinear(hk.Module):
 class LayerEnsembleMLP(hk.Module):
     """Parallel num_ensemble MLPs all with same output_sizes.
 
-  In the first layer, the input is 'branched' to num_ensemble linear layers.
-  Then, in subsequent layers it is purely parallel EnsembleLinear.
-  """
+    In the first layer, the input is 'branched' to num_ensemble linear layers.
+    Then, in subsequent layers it is purely parallel EnsembleLinear.
+    """
 
     def __init__(
         self,
@@ -270,15 +272,15 @@ def make_einsum_layer_ensemble_mlp_enn(
 ) -> base.EpistemicNetwork:
     """Factory method to create fast einsum MLP ensemble ENN.
 
-  This is a specialized implementation for ReLU MLP without a prior network.
+    This is a specialized implementation for ReLU MLP without a prior network.
 
-  Args:
-    output_sizes: Sequence of integer sizes for the MLPs.
-    num_ensemble: Integer number of elements in the ensemble.
-    nonzero_bias: Whether to make the initial layer bias nonzero.
-  Returns:
-    EpistemicNetwork as an ensemble of MLP.
-  """
+    Args:
+      output_sizes: Sequence of integer sizes for the MLPs.
+      num_ensemble: Integer number of elements in the ensemble.
+      nonzero_bias: Whether to make the initial layer bias nonzero.
+    Returns:
+      EpistemicNetwork as an ensemble of MLP.
+    """
 
     def ensemble_forward(x: base.Array) -> base.OutputWithPrior:
         """Forwards the entire ensemble at given input x."""
@@ -312,17 +314,17 @@ def make_einsum_layer_ensemble_mlp_with_prior_enn(
 ) -> base.EpistemicNetwork:
     """Factory method to create fast einsum MLP ensemble with matched prior.
 
-  Args:
-    output_sizes: Sequence of integer sizes for the MLPs.
-    dummy_input: Example x input for prior initialization.
-    num_ensemble: Integer number of elements in the ensemble.
-    prior_scale: Float rescaling of the prior MLP.
-    nonzero_bias: Whether to make the initial layer bias nonzero.
-    seed: integer seed for prior init.
+    Args:
+      output_sizes: Sequence of integer sizes for the MLPs.
+      dummy_input: Example x input for prior initialization.
+      num_ensemble: Integer number of elements in the ensemble.
+      prior_scale: Float rescaling of the prior MLP.
+      nonzero_bias: Whether to make the initial layer bias nonzero.
+      seed: integer seed for prior init.
 
-  Returns:
-    EpistemicNetwork ENN of the ensemble of MLP with matches prior.
-  """
+    Returns:
+      EpistemicNetwork ENN of the ensemble of MLP with matches prior.
+    """
 
     enn = make_einsum_layer_ensemble_mlp_enn(output_sizes, num_ensembles, nonzero_bias)
     init_key, _ = jax.random.split(jax.random.PRNGKey(seed))
@@ -395,9 +397,13 @@ class TrueLayerEnsembleMLP(hk.Module):
                     b_init = hk.initializers.TruncatedNormal(stddev=1)
                 else:
                     b_init = jnp.zeros
-                layers.append(TrueLayerEnsembleBranch(num_ensemble, output_size, b_init))
+                layers.append(
+                    TrueLayerEnsembleBranch(num_ensemble, output_size, b_init)
+                )
             else:
-                layers.append(TrueLayerEnsembleBranch(num_ensemble, output_size, jnp.zeros))
+                layers.append(
+                    TrueLayerEnsembleBranch(num_ensemble, output_size, jnp.zeros)
+                )
         self.layers = tuple(layers)
 
     def __call__(
@@ -420,15 +426,15 @@ def make_true_einsum_layer_ensemble_mlp_enn(
 ) -> base.EpistemicNetwork:
     """Factory method to create fast einsum MLP ensemble ENN.
 
-  This is a specialized implementation for ReLU MLP without a prior network.
+    This is a specialized implementation for ReLU MLP without a prior network.
 
-  Args:
-    output_sizes: Sequence of integer sizes for the MLPs.
-    num_ensemble: Integer number of elements in the ensemble.
-    nonzero_bias: Whether to make the initial layer bias nonzero.
-  Returns:
-    EpistemicNetwork as an ensemble of MLP.
-  """
+    Args:
+      output_sizes: Sequence of integer sizes for the MLPs.
+      num_ensemble: Integer number of elements in the ensemble.
+      nonzero_bias: Whether to make the initial layer bias nonzero.
+    Returns:
+      EpistemicNetwork as an ensemble of MLP.
+    """
 
     def ensemble_forward(x: base.Array, index: Sequence[int]) -> base.OutputWithPrior:
         """Forwards the entire ensemble at given input x."""
@@ -463,17 +469,17 @@ def make_true_einsum_layer_ensemble_mlp_with_prior_enn(
 ) -> base.EpistemicNetwork:
     """Factory method to create fast einsum MLP ensemble with matched prior.
 
-  Args:
-    output_sizes: Sequence of integer sizes for the MLPs.
-    dummy_input: Example x input for prior initialization.
-    num_ensemble: Integer number of elements in the ensemble.
-    prior_scale: Float rescaling of the prior MLP.
-    nonzero_bias: Whether to make the initial layer bias nonzero.
-    seed: integer seed for prior init.
+    Args:
+      output_sizes: Sequence of integer sizes for the MLPs.
+      dummy_input: Example x input for prior initialization.
+      num_ensemble: Integer number of elements in the ensemble.
+      prior_scale: Float rescaling of the prior MLP.
+      nonzero_bias: Whether to make the initial layer bias nonzero.
+      seed: integer seed for prior init.
 
-  Returns:
-    EpistemicNetwork ENN of the ensemble of MLP with matches prior.
-  """
+    Returns:
+      EpistemicNetwork ENN of the ensemble of MLP with matches prior.
+    """
 
     enn = make_true_einsum_layer_ensemble_mlp_enn(
         output_sizes, num_ensembles, nonzero_bias, correlated
@@ -550,7 +556,9 @@ class LayerEnsembleCorMLP(hk.Module):
                     b_init = jnp.zeros
                 layers.append(LayerEnsembleCorBranch(num_ensemble, output_size, b_init))
             else:
-                layers.append(LayerEnsembleCorBranch(num_ensemble, output_size, jnp.zeros))
+                layers.append(
+                    LayerEnsembleCorBranch(num_ensemble, output_size, jnp.zeros)
+                )
         self.layers = tuple(layers)
 
     def __call__(
@@ -561,6 +569,7 @@ class LayerEnsembleCorMLP(hk.Module):
     def dynamic_indexer(self, num_samples):
 
         import numpy as np
+
         def create_all_samples(i, num_ensembles, prefix):
             result = []
             for q in range(num_ensembles[i]):
@@ -577,7 +586,9 @@ class LayerEnsembleCorMLP(hk.Module):
 
         indices = np.random.choice(len(all_samples), num_samples, replace=False)
         results = all_samples[indices]
-        lex_results = [results[:, results.shape[-1] - 1 - i] for i in range(results.shape[-1])]
+        lex_results = [
+            results[:, results.shape[-1] - 1 - i] for i in range(results.shape[-1])
+        ]
         sorted_results = results[np.lexsort(lex_results)]
 
         return sorted_results
@@ -625,7 +636,7 @@ class LayerEnsembleCorMLP(hk.Module):
             if last_index is not None:
                 results += ole(i + 1, last_out, last_sub_samples)
                 all_last_sub_samples.append(last_sub_samples)
-            
+
             assert len(results) == len(sub_samples)
             return results
 

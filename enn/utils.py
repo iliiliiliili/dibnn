@@ -31,7 +31,8 @@ FLAGS = flags.FLAGS
 
 
 def epistemic_network_from_module(
-    enn_ctor: Callable[[], base.EpistemicModule], indexer: base.EpistemicIndexer,
+    enn_ctor: Callable[[], base.EpistemicModule],
+    indexer: base.EpistemicIndexer,
 ) -> base.EpistemicNetwork:
     """Convert an Enn module to epistemic network with paired index."""
 

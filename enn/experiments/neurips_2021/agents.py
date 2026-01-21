@@ -62,7 +62,8 @@ def extract_enn_sampler(
 
 
 def extract_multi_indexer_enn_sampler(
-    experiment: supervised.Experiment, indexer_id,
+    experiment: supervised.Experiment,
+    indexer_id,
 ) -> testbed_base.EpistemicSampler:
     def enn_sampler(x: enn_base.Array, seed: int = 0) -> enn_base.Array:
         """Generate a random sample from posterior distribution at x."""
@@ -75,12 +76,14 @@ def extract_multi_indexer_enn_sampler(
 def extract_batched_enn_sampler(
     experiment: supervised.BatchedExperiment,
 ) -> testbed_base.EpistemicSampler:
-    def enn_sampler(x: enn_base.Array, num_samples: int, seed: int = 0) -> enn_base.Array:
+    def enn_sampler(
+        x: enn_base.Array, num_samples: int, seed: int = 0
+    ) -> enn_base.Array:
         """Generate a random sample from posterior distribution at x."""
         net_out = experiment.predict(x, seed, num_samples)
         return utils.parse_net_output(net_out)
 
-    return jax.jit(enn_sampler, static_argnums=(1, ))
+    return jax.jit(enn_sampler, static_argnums=(1,))
 
 
 def extract_batched_fixed_enn_sampler(
@@ -103,7 +106,11 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
     experiment: Optional[supervised.Experiment] = None
 
     def __call__(
-        self, data: testbed_base.Data, prior: testbed_base.PriorKnowledge, evaluate: Callable = None, log_file_name: str = None,
+        self,
+        data: testbed_base.Data,
+        prior: testbed_base.PriorKnowledge,
+        evaluate: Callable = None,
+        log_file_name: str = None,
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         enn = self.config.enn_ctor(prior)
@@ -151,14 +158,21 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                     + str(kl_quality.extra["std_error"])
                     + "\n"
                 )
-            
-            if self.best_kl is None or self.best_kl.kl_estimate > kl_quality.kl_estimate:
+
+            if (
+                self.best_kl is None
+                or self.best_kl.kl_estimate > kl_quality.kl_estimate
+            ):
                 self.best_kl = kl_quality
                 return False
             else:
-                return False # True
+                return False  # True
 
-        loss = self.experiment.train(self.config.num_batches, None if evaluate is None else log_evaluate, log_file_name)
+        loss = self.experiment.train(
+            self.config.num_batches,
+            None if evaluate is None else log_evaluate,
+            log_file_name,
+        )
         return extract_enn_sampler(self.experiment)
 
 
@@ -171,7 +185,11 @@ class MultiIndexerEnnAgent(testbed_base.TestbedAgent):
     experiment: Optional[supervised.Experiment] = None
 
     def __call__(
-        self, data: testbed_base.Data, prior: testbed_base.PriorKnowledge, evaluate: Callable = None, log_file_name: str = None,
+        self,
+        data: testbed_base.Data,
+        prior: testbed_base.PriorKnowledge,
+        evaluate: Callable = None,
+        log_file_name: str = None,
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         enn = self.config.enn_ctor(prior)
@@ -214,7 +232,11 @@ class BatchedEnnAgent(testbed_base.TestbedAgent):
     experiment: Optional[supervised.Experiment] = None
 
     def __call__(
-        self, data: testbed_base.Data, prior: testbed_base.PriorKnowledge, evaluate: Callable = None, log_file_name: str = None,
+        self,
+        data: testbed_base.Data,
+        prior: testbed_base.PriorKnowledge,
+        evaluate: Callable = None,
+        log_file_name: str = None,
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         enn = self.config.enn_ctor(prior)
@@ -255,7 +277,12 @@ class BatchedRankedEnnAgent(testbed_base.TestbedAgent):
     experiment: Optional[supervised.Experiment] = None
 
     def __call__(
-        self, data: testbed_base.Data, prior: testbed_base.PriorKnowledge, evaluate: Callable = None, log_file_name: str = None, max_num_samples = None,
+        self,
+        data: testbed_base.Data,
+        prior: testbed_base.PriorKnowledge,
+        evaluate: Callable = None,
+        log_file_name: str = None,
+        max_num_samples=None,
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         enn = self.config.enn_ctor(prior)
@@ -284,7 +311,10 @@ class BatchedRankedEnnAgent(testbed_base.TestbedAgent):
 
         batched_fixed_sampler = extract_batched_fixed_enn_sampler(self.experiment)
 
-        all_indices = enn.indexer.batched(jax.random.PRNGKey(0), self.config.max_num_samples if max_num_samples is None else max_num_samples)
+        all_indices = enn.indexer.batched(
+            jax.random.PRNGKey(0),
+            self.config.max_num_samples if max_num_samples is None else max_num_samples,
+        )
 
         return batched_fixed_sampler, all_indices
 

@@ -31,7 +31,10 @@ import optax
 
 class CategoricalEnsemblesTest(parameterized.TestCase):
     @parameterized.parameters(
-        [[[20], np.linspace(-5, 5, 10), 3], [[], np.linspace(-1, 1, 10), 1],]
+        [
+            [[20], np.linspace(-5, 5, 10), 3],
+            [[], np.linspace(-1, 1, 10), 1],
+        ]
     )
     def test_categorical_ensemble(
         self, hiddens: List[int], atoms: base.Array, num_ensemble: int

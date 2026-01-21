@@ -63,6 +63,7 @@ int_fields = [
     "num_index_samples",
     "indexer",
     # "num_batches",
+    "training_steps",
 ]
 int_list_fields = [
     "num_ensembles",
@@ -215,21 +216,41 @@ summary_select_agent_params = {
         #     "hidden_size": [50],
         #     "num_ensemble": [3],
         # },
+        # {
+        #     "agent_suffix": "_10t3k",
+        #     "noise_scale": [1.0],
+        #     "prior_scale": [1.0],
+        #     "num_layers": [2],
+        #     "hidden_size": [50],
+        #     "num_ensemble": [10],
+        #     "training_steps": [3000],
+        # },
+        # {
+        #     "agent_suffix": "_30t3k",
+        #     "noise_scale": [1.0],
+        #     "prior_scale": [1.0],
+        #     "num_layers": [2],
+        #     "hidden_size": [50],
+        #     "num_ensemble": [30],
+        #     "training_steps": [3000],
+        # },
         {
-            "agent_suffix": "_10",
+            "agent_suffix": "_10t1k",
             "noise_scale": [1.0],
             "prior_scale": [1.0],
             "num_layers": [2],
             "hidden_size": [50],
             "num_ensemble": [10],
+            "training_steps": [1000],
         },
         {
-            "agent_suffix": "_30",
+            "agent_suffix": "_30t1k",
             "noise_scale": [1.0],
             "prior_scale": [1.0],
             "num_layers": [2],
             "hidden_size": [50],
             "num_ensemble": [30],
+            "training_steps": [1000],
         },
     ],
     "dropout": [
@@ -993,8 +1014,10 @@ def plot_summary(
             "vnn",
             "hypermodel",
             # "ensemble\n3",
-            "ensemble\n10",
-            "ensemble\n30",
+            "ensemble\n10t3k",
+            "ensemble\n30t3k",
+            "ensemble\n10t1k",
+            "ensemble\n30t1k",
             # "layer_ensemble",
             # "layer_ensemble_cor",
             # "layer_ensemble_einsum_cor",
@@ -1415,14 +1438,14 @@ def plot_summary_from_csv(
     )
 
 
-def create_combined_summary_plots(summary_input_dims=[[1, 10, 100, 1000], [10, 100, 1000], [1000]]):
+def create_combined_summary_plots(
+    summary_input_dims=[[1, 10, 100, 1000], [10, 100, 1000]]
+):
 
     files = glob("results/results_*.txt")
 
     for ids in summary_input_dims:
-        plot_summary(
-            files, ids
-        )
+        plot_summary(files, ids)
 
 
 def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]]):

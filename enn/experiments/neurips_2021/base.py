@@ -49,9 +49,9 @@ class ENNQuality:
 class EpistemicSampler(typing_extensions.Protocol):
     """Interface for drawing posterior samples from distribution.
 
-  We are considering a model of data: y_i = f(x_i) + e_i.
-  In this case the sampler should only model f(x), not aleatoric y.
-  """
+    We are considering a model of data: y_i = f(x_i) + e_i.
+    In this case the sampler should only model f(x), not aleatoric y.
+    """
 
     def __call__(self, x: chex.Array, seed: int = 0) -> chex.Array:
         """Generate a random sample for epistemic f(x)."""

@@ -73,7 +73,7 @@ class GPRegression:
 
         # Form the posterior prediction at cached test data
         predict_fn = nt.predict.gradient_descent_mse_ensemble(
-            kernel_fn, x_train, y_train, diag_reg=(noise_std ** 2)
+            kernel_fn, x_train, y_train, diag_reg=(noise_std**2)
         )
         self._test_mean, self._test_cov = predict_fn(
             t=None, x_test=self._x_test, get="nngp", compute_cov=True
@@ -166,7 +166,11 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
         error_std = jnp.mean(jnp.abs((posterior_std - enn_std) / posterior_std))
 
         result = testbed_base.ENNQuality(
-            kl_estimate, {"mean_error": error_mean, "std_error": error_std,}
+            kl_estimate,
+            {
+                "mean_error": error_mean,
+                "std_error": error_std,
+            },
         )
 
         return result
@@ -200,7 +204,11 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
         error_std = jnp.mean(jnp.abs((posterior_std - enn_std) / posterior_std))
 
         result = testbed_base.ENNQuality(
-            kl_estimate, {"mean_error": error_mean, "std_error": error_std,}
+            kl_estimate,
+            {
+                "mean_error": error_mean,
+                "std_error": error_std,
+            },
         )
 
         return result
@@ -236,7 +244,11 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
         error_std = jnp.mean(jnp.abs((posterior_std - enn_std) / posterior_std))
 
         result = testbed_base.ENNQuality(
-            kl_estimate, {"mean_error": error_mean, "std_error": error_std,}
+            kl_estimate,
+            {
+                "mean_error": error_mean,
+                "std_error": error_std,
+            },
         )
 
         return result
@@ -295,7 +307,11 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
             error_std = jnp.mean(jnp.abs((posterior_std - enn_std) / posterior_std))
 
             result = testbed_base.ENNQuality(
-                kl_estimate, {"mean_error": error_mean, "std_error": error_std,}
+                kl_estimate,
+                {
+                    "mean_error": error_mean,
+                    "std_error": error_std,
+                },
             )
 
             return result
@@ -383,5 +399,5 @@ class TestbedGPRegression(testbed_base.TestbedProblem):
 def _kl_gaussian(mean_1: float, std_1: float, mean_2: float, std_2: float) -> float:
     """Computes the KL(P_1 || P_2) for P_1,P_2 univariate Gaussian."""
     log_term = jnp.log(std_2 / std_1)
-    frac_term = (std_1 ** 2 + (mean_1 - mean_2) ** 2) / (2 * std_2 ** 2)
+    frac_term = (std_1**2 + (mean_1 - mean_2) ** 2) / (2 * std_2**2)
     return log_term + frac_term - 0.5

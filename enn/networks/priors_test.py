@@ -62,13 +62,20 @@ class PriorsTest(parameterized.TestCase):
         )
         prior_fn = lambda x, z: transformed.apply(prior_params, x)
         enn = priors.EnnWithAdditivePrior(
-            enn=train_enn, prior_fn=prior_fn, prior_scale=1.0,
+            enn=train_enn,
+            prior_fn=prior_fn,
+            prior_scale=1.0,
         )
         experiment = test_experiment.experiment_ctor(enn)
         experiment.train(10)
 
     @parameterized.parameters(
-        [[1, 3, 10, 10], [2, 5, 1, 10], [5, 1, 5, 10], [5, 5, 5, 1],]
+        [
+            [1, 3, 10, 10],
+            [2, 5, 1, 10],
+            [5, 1, 5, 10],
+            [5, 5, 5, 1],
+        ]
     )
     def test_random_gp_forward(
         self, input_dim: int, output_dim: int, num_feat: int, batch_size: int
@@ -106,7 +113,9 @@ class PriorsTest(parameterized.TestCase):
         )
 
         enn = priors.EnnWithAdditivePrior(
-            enn=train_enn, prior_fn=prior_fn, prior_scale=1.0,
+            enn=train_enn,
+            prior_fn=prior_fn,
+            prior_scale=1.0,
         )
         experiment = test_experiment.experiment_ctor(enn)
         experiment.train(10)

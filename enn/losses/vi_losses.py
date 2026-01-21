@@ -30,20 +30,20 @@ import jax.numpy as jnp
 def get_awgn_loglike_fn(sigma_w: float) -> Callable[[base.Output, base.Batch], float]:
     """Returns a function that computes the simple unnormalized log likelihood.
 
-  It assumes response variable is perturbed with additive iid Gaussian noise.
+    It assumes response variable is perturbed with additive iid Gaussian noise.
 
-  Args:
-    sigma_w: standard deviation of the additive Gaussian noise.
+    Args:
+      sigma_w: standard deviation of the additive Gaussian noise.
 
-  Returns:
-    A function that computes the log likelihood given data and output.
+    Returns:
+      A function that computes the log likelihood given data and output.
 
-  """
+    """
 
     def log_likelihood_fn(out: base.Output, batch: base.Batch):
         chex.assert_shape(batch.y, (None, 1))
         err_sq = jnp.mean(jnp.square(utils.parse_net_output(out) - batch.y))
-        return -0.5 * err_sq / sigma_w ** 2
+        return -0.5 * err_sq / sigma_w**2
 
     return log_likelihood_fn
 
@@ -53,15 +53,15 @@ def get_categorical_loglike_fn(
 ) -> Callable[[base.Output, base.Batch], float]:
     """Returns a function that computes the unnormalized log likelihood.
 
-  It assumes response variable has a categorical distribution.
+    It assumes response variable has a categorical distribution.
 
-  Args:
-    num_classes: number of classes for the output.
+    Args:
+      num_classes: number of classes for the output.
 
-  Returns:
-    A function that computes the log likelihood given data and prediction.
+    Returns:
+      A function that computes the log likelihood given data and prediction.
 
-  """
+    """
 
     def log_likelihood_fn(out: base.Output, batch: base.Batch):
         chex.assert_shape(batch.y, (None, 1))
@@ -80,20 +80,20 @@ def normal_log_prob(latent: base.Array, sigma: float = 1, mu: float = 0):
     latent_dim = len(latent)
     latent_l2_sq = jnp.sum(jnp.square(latent - mu))
     return -0.5 * (
-        latent_dim * jnp.log(2 * jnp.pi * sigma ** 2) + latent_l2_sq / sigma ** 2
+        latent_dim * jnp.log(2 * jnp.pi * sigma**2) + latent_l2_sq / sigma**2
     )
 
 
 def get_nn_params_log_prior_prob_fn(sigma_0: float) -> Callable[[jnp.array], float]:
     """Returns a function that computes params prior log likelihood from output.
 
-  It assumes that the network output's extra field has an element with the key
-  `generated_params` that represents the latent variable.
-  It also assumes that index is Gaussian.
+    It assumes that the network output's extra field has an element with the key
+    `generated_params` that represents the latent variable.
+    It also assumes that index is Gaussian.
 
-  Args:
-    sigma_0: standard deviation of the index.
-  """
+    Args:
+      sigma_0: standard deviation of the index.
+    """
 
     def log_prob_fn(out: base.Output):
         latent = out.extra["hyper_net_out"]
@@ -109,10 +109,10 @@ def get_lhm_log_model_prob_fn(
 ) -> Callable[[base.Output, hk.Params, base.Index], float]:
     """Returns a function for log probability of latent under the model.
 
-  It assumes index to be Gaussian with standard deviation sigma_z.
-  Args:
-    sigma_z: index standard deviation.
-  """
+    It assumes index to be Gaussian with standard deviation sigma_z.
+    Args:
+      sigma_z: index standard deviation.
+    """
 
     def log_prob_fn(out: base.Output, params: hk.Params, index: base.Index):
         del out  # Here we compute the log prob from params and index directly.
@@ -126,7 +126,7 @@ def get_lhm_log_model_prob_fn(
         )
         log_det_w = 0.5 * log_det_w_sq
         index_l2_sq = jnp.sum(jnp.square(index))
-        return -0.5 * index_l2_sq / sigma_z ** 2 - log_det_w
+        return -0.5 * index_l2_sq / sigma_z**2 - log_det_w
 
     return log_prob_fn
 
@@ -138,36 +138,36 @@ def get_diagonal_linear_hypermodel_elbo_fn(
 ) -> single_index.ElboLoss:
     """Returns the negative ELBO for diagonal linear hypermodels.
 
-  Args:
-    log_likelihood_fn: log likelihood function.
-    sigma_0: Standard deviation of the Gaussian latent (params) prior.
-    num_samples: effective number of samples.
-  Returns:
-    Negative ELBO value.
-  """
+    Args:
+      log_likelihood_fn: log likelihood function.
+      sigma_0: Standard deviation of the Gaussian latent (params) prior.
+      num_samples: effective number of samples.
+    Returns:
+      Negative ELBO value.
+    """
 
     def model_prior_kl_fn(
         out: base.Output, params: hk.Params, index: base.Index
     ) -> float:
         """Compute the KL distance between model and prior densities in a linear HM.
 
-    weights `w` and biases `b` are assumed included in `params`. The latent
-    variables (which are the parameters of the base network) are generated as u
-    = z @ w + b where z is the index variable. The index is assumed Gaussian
-    *with variance equal to the prior variance* of the latent variables.
+        weights `w` and biases `b` are assumed included in `params`. The latent
+        variables (which are the parameters of the base network) are generated as u
+        = z @ w + b where z is the index variable. The index is assumed Gaussian
+        *with variance equal to the prior variance* of the latent variables.
 
-    This function also  assumes a Gaussian prior distribution for the latent,
-    i.e., parameters of the base network.
+        This function also  assumes a Gaussian prior distribution for the latent,
+        i.e., parameters of the base network.
 
-    Args:
-      out: final output of the hypermodel, i.e., y = f_theta(x, z)
-      params: parameters of the hypermodel (Note that this is the parameters of
-        the hyper network since base network params are set by the hyper net.)
-      index: index z
+        Args:
+          out: final output of the hypermodel, i.e., y = f_theta(x, z)
+          params: parameters of the hypermodel (Note that this is the parameters of
+            the hyper network since base network params are set by the hyper net.)
+          index: index z
 
-    Returns:
-      KL distance.
-    """
+        Returns:
+          KL distance.
+        """
 
         del out, index  # Here we compute the log prob from params directly.
         predicate = lambda module_name, name, value: name == "w"
@@ -183,7 +183,7 @@ def get_diagonal_linear_hypermodel_elbo_fn(
             / num_samples
             * (
                 jnp.sum(jnp.square(scales))
-                + jnp.sum(jnp.square(biases)) / (sigma_0 ** 2)
+                + jnp.sum(jnp.square(biases)) / (sigma_0**2)
                 - len(biases)
                 - 2 * jnp.sum(jnp.log(scales))
             )
@@ -201,37 +201,37 @@ def get_linear_hypermodel_elbo_fn(
 ) -> single_index.ElboLoss:
     """Returns a loss function that computes the ELBO for linear hypermodels.
 
-  Args:
-    log_likelihood_fn: log likelihood function.
-    sigma_0: Standard deviation of the Gaussian latent (params) prior.
-    num_samples: effective number of samples.
-  Returns:
-    Negative ELBO value.
-  """
+    Args:
+      log_likelihood_fn: log likelihood function.
+      sigma_0: Standard deviation of the Gaussian latent (params) prior.
+      num_samples: effective number of samples.
+    Returns:
+      Negative ELBO value.
+    """
 
     def model_prior_kl_fn(
         out: base.Output, params: hk.Params, index: base.Index
     ) -> float:
         """Compute the KL distance between model and prior densities in a linear HM.
 
-    weights `w` and biases `b` are assumed included in `params`. The latent
-    variables (which are the parameters of the base network) are generated as u
-    = z @ w + b where z is the index variable. The index is assumed Gaussian
-    *with variance equal to the prior variance* of the latent variables.
+        weights `w` and biases `b` are assumed included in `params`. The latent
+        variables (which are the parameters of the base network) are generated as u
+        = z @ w + b where z is the index variable. The index is assumed Gaussian
+        *with variance equal to the prior variance* of the latent variables.
 
-    This function also  assumes a Gaussian prior distribution for the latent,
-    i.e., parameters of the base network, and assumes the index to be Gaussian
-    *with variance equal to the prior variance* of the latent variables.
+        This function also  assumes a Gaussian prior distribution for the latent,
+        i.e., parameters of the base network, and assumes the index to be Gaussian
+        *with variance equal to the prior variance* of the latent variables.
 
-    Args:
-      out: final output of the hypermodel, i.e., y = f_theta(x, z)
-      params: parameters of the hypermodel (Note that this is the parameters of
-        the hyper network since base network params are set by the hyper net.)
-      index: index z
+        Args:
+          out: final output of the hypermodel, i.e., y = f_theta(x, z)
+          params: parameters of the hypermodel (Note that this is the parameters of
+            the hyper network since base network params are set by the hyper net.)
+          index: index z
 
-    Returns:
-      KL distance.
-    """
+        Returns:
+          KL distance.
+        """
 
         del out, index  # Here we compute the log prob from params directly.
         predicate = lambda module_name, name, value: name == "w"
@@ -262,7 +262,7 @@ def get_linear_hypermodel_elbo_fn(
                 sigma_u_trace
                 - index_dim
                 - sigma_u_log_det
-                + proj_biases_norm / sigma_0 ** 2
+                + proj_biases_norm / sigma_0**2
             )
         )
 
@@ -278,13 +278,13 @@ def get_hyperflow_elbo_fn(
 ) -> single_index.ElboLoss:
     """Returns a loss function that computes the ELBO for hyperflows.
 
-  Args:
-    log_likelihood_fn: log likelihood function.
-    sigma_0: Standard deviation of the Gaussian latent (params) prior.
-    num_samples: effective number of samples.
-  Returns:
-    loss function computing negative ELBO.
-  """
+    Args:
+      log_likelihood_fn: log likelihood function.
+      sigma_0: Standard deviation of the Gaussian latent (params) prior.
+      num_samples: effective number of samples.
+    Returns:
+      loss function computing negative ELBO.
+    """
 
     def model_prior_kl_fn(out, params, index):
         del params, index

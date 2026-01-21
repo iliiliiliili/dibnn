@@ -25,7 +25,12 @@ import numpy as np
 
 class LossesTest(parameterized.TestCase):
     @parameterized.parameters(
-        [[1.0, 0.0, 1.0], [1.0, 0.0, 10.0], [10.0, 1.0, 1.0], [10.0, 10.0, 1.0],]
+        [
+            [1.0, 0.0, 1.0],
+            [1.0, 0.0, 10.0],
+            [10.0, 1.0, 1.0],
+            [10.0, 10.0, 1.0],
+        ]
     )
     def test_diagonal_linear_hypermodel_elbo_fn(
         self, sigma: float, mu: float, sigma_0: float
@@ -41,11 +46,17 @@ class LossesTest(parameterized.TestCase):
         w_scale = np.log(np.exp(sigma) - 1)  # sigma = log(1 + exp(w))
         params = {
             "layer": {
-                "w": w_scale * np.ones(num_params,),
-                "b": mu * np.ones(num_params,),
+                "w": w_scale
+                * np.ones(
+                    num_params,
+                ),
+                "b": mu
+                * np.ones(
+                    num_params,
+                ),
             }
         }
-        kl = 0.5 * num_params * (sigma ** 2 + mu ** 2 / sigma_0 - 1 - 2 * np.log(sigma))
+        kl = 0.5 * num_params * (sigma**2 + mu**2 / sigma_0 - 1 - 2 * np.log(sigma))
         batch = enn_base.Batch(x=np.zeros((2, 1)), y=np.zeros((2, 1)))
         nelbo, _ = nelbo_fn(
             apply=lambda *args: np.zeros((2,)),

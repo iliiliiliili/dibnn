@@ -141,7 +141,7 @@ def add_data_noise(
     def noisy_loss(
         apply: base.ApplyFn, model: nn.Module, batch: base.Batch, index: base.Index
     ) -> Tuple[torch.Tensor, base.LossMetrics]:
-        noisy_batch = noise_fn(batch, index)
+        noisy_batch = noise_fn(batch, index, device=batch.y.device)
         return single_loss(apply, model, noisy_batch, index)
 
     return noisy_loss
@@ -199,19 +199,17 @@ class L2Loss(SingleIndexLossFn):
         index: base.Index,
     ) -> Tuple[torch.Tensor, base.LossMetrics]:
         """L2 regression applied to a single epistemic index."""
-        net_out = utils.parse_net_output(apply(model, batch.x, index))
+
+        raw_net_out = apply(model, batch.x, index)
+        net_out = utils.parse_net_output(raw_net_out)
 
         sq_loss = torch.square(net_out - batch.y)
 
         if batch.weights is None:
             batch_weights = torch.ones_like(batch.y)
         else:
-            batch_weights = (
-                batch.weights
-                if isinstance(batch.weights, torch.Tensor)
-                else torch.tensor(batch.weights, dtype=torch.float32)
-            )
-        
+            batch_weights = batch.weights
+
         result = torch.mean(batch_weights * sq_loss)
 
         return result, {}

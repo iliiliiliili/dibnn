@@ -18,6 +18,7 @@
 
 from absl import app
 from absl import flags
+
 # from jax.interpreters.xla import primitive_uses_outfeed
 from enn.experiments.neurips_2021 import agent_factories
 from enn.experiments.neurips_2021 import agents
@@ -37,10 +38,14 @@ flags.DEFINE_multi_float(
     "noise_std", [0.01, 0.1, 1.0], "Additive noise standard deviation."
 )
 flags.DEFINE_multi_integer(
-    "max_num_samples", [10, 100, 1000], "Sample set size for selection. Continuous models are not limited by design."
+    "max_num_samples",
+    [10, 100, 1000],
+    "Sample set size for selection. Continuous models are not limited by design.",
 )
 # flags.DEFINE_multi_integer("seed", [1], "Seeds for testbed problem.")
-flags.DEFINE_multi_integer("seed", [1, 2, 6, 0, 5, 17, 12, 260, 19, 98], "Seeds for testbed problem.")
+flags.DEFINE_multi_integer(
+    "seed", [1, 2, 6, 0, 5, 17, 12, 260, 19, 98], "Seeds for testbed problem."
+)
 
 
 # ENN agent
@@ -122,7 +127,9 @@ def main(_):
                             print("agent_id", agent_id, "of", len(sweep))
 
                             # Form the appropriate agent for training
-                            agent = agents.BatchedRankedEnnAgent(agent_config.config_ctor())
+                            agent = agents.BatchedRankedEnnAgent(
+                                agent_config.config_ctor()
+                            )
 
                             log_file_name = (
                                 "single_runs/single_run_"
@@ -144,10 +151,16 @@ def main(_):
 
                             # Evaluate the quality of the ENN sampler after training
                             enn_sampler, all_indices = agent(
-                                problem.train_data, problem.prior_knowledge, None, log_file_name, max_num_samples=max_num_samples
+                                problem.train_data,
+                                problem.prior_knowledge,
+                                None,
+                                log_file_name,
+                                max_num_samples=max_num_samples,
                             )
 
-                            best_samples = problem.find_best_samples_batched(enn_sampler, all_indices)
+                            best_samples = problem.find_best_samples_batched(
+                                enn_sampler, all_indices
+                            )
 
                             for samples, best_kl_dict in best_samples.items():
 
@@ -183,8 +196,15 @@ def main(_):
 
                             for id, local_kls in kls.items():
 
-                                kl_mean = sum([kl_quality.kl_estimate for kl_quality in local_kls]) / len(local_kls)
-                                kl_variance = sum([(kl_quality.kl_estimate - kl_mean) ** 2 for kl_quality in local_kls]) / len(local_kls)
+                                kl_mean = sum(
+                                    [kl_quality.kl_estimate for kl_quality in local_kls]
+                                ) / len(local_kls)
+                                kl_variance = sum(
+                                    [
+                                        (kl_quality.kl_estimate - kl_mean) ** 2
+                                        for kl_quality in local_kls
+                                    ]
+                                ) / len(local_kls)
 
                                 f.write(
                                     str(agent_id)
@@ -195,10 +215,26 @@ def main(_):
                                     + str(kl_variance)
                                     + " "
                                     + "mean_error="
-                                    + str(sum([kl_quality.extra["mean_error"] for kl_quality in local_kls]) / len(local_kls))
+                                    + str(
+                                        sum(
+                                            [
+                                                kl_quality.extra["mean_error"]
+                                                for kl_quality in local_kls
+                                            ]
+                                        )
+                                        / len(local_kls)
+                                    )
                                     + " "
                                     + "std_error="
-                                    + str(sum([kl_quality.extra["std_error"] for kl_quality in local_kls]) / len(local_kls))
+                                    + str(
+                                        sum(
+                                            [
+                                                kl_quality.extra["std_error"]
+                                                for kl_quality in local_kls
+                                            ]
+                                        )
+                                        / len(local_kls)
+                                    )
                                     + " "
                                     + "indexer="
                                     + str(id)

@@ -32,9 +32,9 @@ import typing_extensions
 class SingleIndexLossFn(typing_extensions.Protocol):
     """Calculates a loss based on one batch of data per index.
 
-  You can use utils.average_single_index_loss to make a LossFn out of the
-  SingleIndexLossFn.
-  """
+    You can use utils.average_single_index_loss to make a LossFn out of the
+    SingleIndexLossFn.
+    """
 
     def __call__(
         self,
@@ -47,17 +47,17 @@ class SingleIndexLossFn(typing_extensions.Protocol):
 
 
 def average_single_index_loss(
-    single_loss: SingleIndexLossFn, num_index_samples: int = 1
+    single_loss: SingleIndexLossFn, num_index_samples: int = 1, export_index=None
 ) -> base.LossFn:
     """Average a single index loss over multiple index samples.
 
-  Args:
-    single_loss: loss function applied per epistemic index.
-    num_index_samples: number of index samples to average.
+    Args:
+      single_loss: loss function applied per epistemic index.
+      num_index_samples: number of index samples to average.
 
-  Returns:
-    LossFn that comprises the mean of both the loss and the metrics.
-  """
+    Returns:
+      LossFn that comprises the mean of both the loss and the metrics.
+    """
 
     def loss_fn(
         enn: base.EpistemicNetwork,
@@ -67,7 +67,24 @@ def average_single_index_loss(
     ) -> base.Array:
         batched_indexer = utils.make_batch_indexer(enn.indexer, num_index_samples)
         batched_loss = jax.vmap(single_loss, in_axes=[None, None, None, 0])
-        loss, metrics = batched_loss(enn.apply, params, batch, batched_indexer(key))
+        batched_index = batched_indexer(key)
+        if export_index is not None:
+            export_index(batched_index)
+
+        # def batched_loss(apply, params, batch, batched_index):
+        #     loss_list = []
+        #     metrics_list = []
+        #     for i in range(batched_index.shape[0]):
+        #         loss_i, metrics_i = single_loss(apply, params, batch, batched_index[i])
+        #         loss_list.append(loss_i)
+        #         metrics_list.append(metrics_i)
+        #     total_loss = jnp.stack(loss_list)
+        #     total_metrics = {}
+        #     for key in metrics_list[0].keys():
+        #         total_metrics[key] = jnp.stack([m[key] for m in metrics_list])
+        #     return total_loss, total_metrics
+
+        loss, metrics = batched_loss(enn.apply, params, batch, batched_index)
         return jnp.mean(loss), jax.tree_map(jnp.mean, metrics)
 
     return loss_fn
@@ -78,13 +95,13 @@ def batched_average_single_index_loss(
 ) -> base.LossFn:
     """Average a single index loss over multiple index samples.
 
-  Args:
-    single_loss: loss function applied per epistemic index.
-    num_index_samples: number of index samples to average.
+    Args:
+      single_loss: loss function applied per epistemic index.
+      num_index_samples: number of index samples to average.
 
-  Returns:
-    LossFn that comprises the mean of both the loss and the metrics.
-  """
+    Returns:
+      LossFn that comprises the mean of both the loss and the metrics.
+    """
 
     def loss_fn(
         enn: base.EpistemicNetwork,
@@ -101,6 +118,7 @@ def batched_average_single_index_loss(
         return jnp.mean(loss), jax.tree_map(jnp.mean, metrics)
 
     return loss_fn
+
 
 def add_data_noise(
     single_loss: SingleIndexLossFn, noise_fn: data_noise.DataNoise
@@ -157,7 +175,8 @@ class L2Loss(SingleIndexLossFn):
         """L2 regression applied to a single epistemic index."""
         chex.assert_shape(batch.y, (None, 1))
         chex.assert_shape(batch.data_index, (None, 1))
-        net_out = utils.parse_net_output(apply(params, batch.x, index))
+        raw_net_out = apply(params, batch.x, index)
+        net_out = utils.parse_net_output(raw_net_out)
         chex.assert_equal_shape([net_out, batch.y])
         sq_loss = jnp.square(utils.parse_net_output(net_out) - batch.y)
         if batch.weights is None:
@@ -227,13 +246,13 @@ class AccuracyErrorLoss(SingleIndexLossFn):
 class ElboLoss(SingleIndexLossFn):
     """Standard VI loss (negative of evidence lower bound).
 
-  Given latent variable u with model density q(u), prior density p_0(u)
-  and likelihood function p(D|u) the evidence lower bound is defined as
-      ELBO(q) = E[log(p(D|u))] - KL(q(u)||p_0(u))
-  In other words, maximizing ELBO is equivalent to regularized log likelihood
-  maximization where regularization is encouraging the learned latent
-  distribution to be close to the latent prior as measured by KL.
-  """
+    Given latent variable u with model density q(u), prior density p_0(u)
+    and likelihood function p(D|u) the evidence lower bound is defined as
+        ELBO(q) = E[log(p(D|u))] - KL(q(u)||p_0(u))
+    In other words, maximizing ELBO is equivalent to regularized log likelihood
+    maximization where regularization is encouraging the learned latent
+    distribution to be close to the latent prior as measured by KL.
+    """
 
     log_likelihood_fn: Callable[[base.Output, base.Batch], float]
     model_prior_kl_fn: Callable[[base.Output, hk.Params, base.Index], float]

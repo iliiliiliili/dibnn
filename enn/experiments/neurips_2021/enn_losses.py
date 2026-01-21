@@ -52,7 +52,7 @@ def default_enn_loss(
 
         # Add L2 weight decay
         if weight_reg_scale:
-            scale = (weight_reg_scale ** 2) / (2.0 * prior.num_train)
+            scale = (weight_reg_scale**2) / (2.0 * prior.num_train)
             loss_fn = losses.add_l2_weight_decay(loss_fn, scale=scale)
         return loss_fn
 
@@ -68,13 +68,13 @@ def gaussian_regression_loss(
     """Add a matching Gaussian noise to the target y."""
 
     def loss_ctor(
-        prior: testbed_base.PriorKnowledge, enn: enn_base.EpistemicNetwork
+        prior: testbed_base.PriorKnowledge, enn: enn_base.EpistemicNetwork, export_index=None
     ) -> enn_base.LossFn:
         """Add a matching Gaussian noise to the target y."""
         noise_std = noise_scale * prior.noise_std
         noise_fn = data_noise.GaussianTargetNoise(enn, noise_std)
         single_loss = losses.add_data_noise(losses.L2Loss(), noise_fn)
-        loss_fn = losses.average_single_index_loss(single_loss, num_index_samples)
+        loss_fn = losses.average_single_index_loss(single_loss, num_index_samples, export_index=export_index)
         if l2_weight_decay != 0:
             if exclude_bias_l2:
                 predicate = lambda module, name, value: name != "b"
@@ -91,6 +91,7 @@ def batched_gaussian_regression_loss(
     noise_scale: float = 1,
     l2_weight_decay: float = 0,
     exclude_bias_l2: bool = True,
+    export_index=None
 ) -> LossCtor:
     """Add a matching Gaussian noise to the target y."""
 
@@ -101,7 +102,9 @@ def batched_gaussian_regression_loss(
         noise_std = noise_scale * prior.noise_std
         noise_fn = data_noise.GaussianTargetNoise(enn, noise_std)
         single_loss = losses.add_data_noise(losses.BatchedL2Loss(), noise_fn)
-        loss_fn = losses.batched_average_single_index_loss(single_loss, num_index_samples)
+        loss_fn = losses.batched_average_single_index_loss(
+            single_loss, num_index_samples, export_index=export_index
+        )
         if l2_weight_decay != 0:
             if exclude_bias_l2:
                 predicate = lambda module, name, value: name != "b"
@@ -126,7 +129,7 @@ def regularized_dropout_loss(
     ) -> enn_base.LossFn:
         del enn  # Unused
         single_loss = losses.L2Loss()
-        reg = (scale ** 2) * (1 - dropout_rate) / (2.0 * prior.num_train * tau)
+        reg = (scale**2) * (1 - dropout_rate) / (2.0 * prior.num_train * tau)
         loss_fn = losses.average_single_index_loss(single_loss, num_index_samples)
         return losses.add_l2_weight_decay(loss_fn, scale=reg)
 

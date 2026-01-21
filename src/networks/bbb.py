@@ -25,9 +25,7 @@ import torch
 import torch.nn as nn
 
 
-
 class MlpBbbEnn(base.EpistemicNetwork):
-    """MLP with dropout as an ENN."""
 
     def __init__(
         self,
@@ -35,20 +33,18 @@ class MlpBbbEnn(base.EpistemicNetwork):
         sigma_0: float = 1.0,
         sigma_init: Optional[callable] = None,
         mu_init: Optional[callable] = None,
-        scale_down_weights = True,
+        scale_down_weights=True,
+        use_double_precision: bool = True,
     ):
-        """MLP with dropout as an ENN."""
 
         mu_init = mu_init if mu_init is not None else torch.nn.init.zeros_
 
         class BbbMlp(nn.Module):
-            def __init__(
-                self, output_sizes, sigma_init, mu_init
-            ):
+            def __init__(self, output_sizes, sigma_init, mu_init, use_double_precision):
                 super().__init__()
 
                 self.functional_linear = BatchedFunctionalLinear()
-                
+
                 self.weight_sigmas = nn.ParameterList()
                 self.bias_sigmas = nn.ParameterList()
 
@@ -56,11 +52,15 @@ class MlpBbbEnn(base.EpistemicNetwork):
                 self.bias_mus = nn.ParameterList()
 
                 for i in range(1, len(output_sizes)):
-                    weight_sigma = nn.Parameter(torch.Tensor(output_sizes[i], output_sizes[i - 1]))
-                    bias_sigma = nn.Parameter(torch.Tensor(output_sizes[i]))
-                    weight_mu = nn.Parameter(torch.Tensor(output_sizes[i], output_sizes[i - 1]))
-                    bias_mu = nn.Parameter(torch.Tensor(output_sizes[i]))
-                    
+                    weight_sigma = nn.Parameter(
+                        torch.Tensor(output_sizes[i], output_sizes[i - 1]).to(torch.float64 if use_double_precision else torch.float32)
+                    )
+                    bias_sigma = nn.Parameter(torch.Tensor(output_sizes[i]).to(torch.float64 if use_double_precision else torch.float32))
+                    weight_mu = nn.Parameter(
+                        torch.Tensor(output_sizes[i], output_sizes[i - 1]).to(torch.float64 if use_double_precision else torch.float32)
+                    )
+                    bias_mu = nn.Parameter(torch.Tensor(output_sizes[i]).to(torch.float64 if use_double_precision else torch.float32))
+
                     if sigma_init is not None:
                         sigma_init(weight_sigma)
                         sigma_init(bias_sigma)
@@ -77,26 +77,34 @@ class MlpBbbEnn(base.EpistemicNetwork):
                         torch.nn.init.zeros_(bias_mu)
 
                     self.weight_sigmas.append(weight_sigma)
-                    self.bias_sigmas.append(bias_sigma)                    
+                    self.bias_sigmas.append(bias_sigma)
                     self.weight_mus.append(weight_mu)
                     self.bias_mus.append(bias_mu)
 
-            def forward(self, x: torch.Tensor, indices: List[List[base.DataIndex]]) -> base.Output:
+            def forward(
+                self, x: torch.Tensor, indices: List[List[base.DataIndex]]
+            ) -> base.Output:
 
+                for i, (weight_mu, weight_sigma, bias_mu, bias_sigma) in enumerate(
+                    zip(
+                        self.weight_mus,
+                        self.weight_sigmas,
+                        self.bias_mus,
+                        self.bias_sigmas,
+                    )
+                ):
 
-                for i, (
-                    weight_mu, weight_sigma, bias_mu, bias_sigma
-                )in enumerate(zip(
-                    self.weight_mus, self.weight_sigmas, self.bias_mus, self.bias_sigmas
-                )):
-                    
                     batched_layer_index = [a[i] for a in indices]
 
                     weight_index = torch.stack([a[0] for a in batched_layer_index])
                     bias_index = torch.stack([a[1] for a in batched_layer_index])
 
-                    weight = weight_mu + weight_index * torch.nn.functional.softplus(weight_sigma)
-                    bias = bias_mu + bias_index * torch.nn.functional.softplus(bias_sigma)
+                    weight = weight_mu + weight_index * torch.nn.functional.softplus(
+                        weight_sigma
+                    )
+                    bias = bias_mu + bias_index * torch.nn.functional.softplus(
+                        bias_sigma
+                    )
 
                     if scale_down_weights:
                         weight = weight / math.sqrt(weight.shape[-1])
@@ -107,7 +115,7 @@ class MlpBbbEnn(base.EpistemicNetwork):
                         x = torch.relu(x)
 
                 return x
-        
+
             def get_params_tuple(self):
                 return (
                     self.weight_sigmas,
@@ -118,15 +126,18 @@ class MlpBbbEnn(base.EpistemicNetwork):
 
         indexer = indexers.SetScaledGaussianIndexer(
             index_dims_list=(
-                [(output_sizes[i], output_sizes[i - 1]) for i in range(1, len(output_sizes))] +
-                [(output_sizes[i],) for i in range(1, len(output_sizes))]
+                [
+                    (output_sizes[i], output_sizes[i - 1])
+                    for i in range(1, len(output_sizes))
+                ]
+                + [(output_sizes[i],) for i in range(1, len(output_sizes))]
             ),
             scale=sigma_0,
         )
 
         def indexer_fn(key, device) -> base.EpistemicIndexer:
             index = indexer(key, device)
-            
+
             weight_index = index[: len(output_sizes) - 1]
             bias_index = index[len(output_sizes) - 1 :]
 
@@ -141,9 +152,7 @@ class MlpBbbEnn(base.EpistemicNetwork):
         def init_fn(seed: int) -> nn.Module:
 
             torch.manual_seed(seed)
-            model = BbbMlp(
-                output_sizes, sigma_init, mu_init
-            )
+            model = BbbMlp(output_sizes, sigma_init, mu_init, use_double_precision)
 
             return model
 

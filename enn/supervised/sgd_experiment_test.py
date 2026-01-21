@@ -36,7 +36,8 @@ class ExperimentTest(parameterized.TestCase):
         num_ensemble = 5
         output_sizes = [8, 8, num_outputs]
         enn = networks.MLPEnsembleEnn(
-            output_sizes=output_sizes, num_ensemble=num_ensemble,
+            output_sizes=output_sizes,
+            num_ensemble=num_ensemble,
         )
 
         dataset = utils.make_test_data(100)

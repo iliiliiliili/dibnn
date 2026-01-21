@@ -23,6 +23,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+
 class PrngIndexer(base.EpistemicIndexer):
     """Index by JAX PRNG sequence."""
 
@@ -50,9 +51,15 @@ class EnsembleIndexer(base.EpistemicIndexer):
 
         all_samples = create_all_samples(self.num_ensemble)
 
-        results = jax.random.choice(key, jnp.array(all_samples), [num_samples], replace=num_samples > self.num_ensemble)
+        results = jax.random.choice(
+            key,
+            jnp.array(all_samples),
+            [num_samples],
+            replace=num_samples > self.num_ensemble,
+        )
 
         return results
+
 
 @dataclasses.dataclass
 class LayerEnsembleIndexer(base.EpistemicIndexer):
@@ -72,7 +79,10 @@ class LayerEnsembleIndexer(base.EpistemicIndexer):
             )
 
         return jnp.array(
-            [jax.random.randint(key, [], 0, num_ensemble) for key, num_ensemble in zip(keys, self.num_ensembles)]
+            [
+                jax.random.randint(key, [], 0, num_ensemble)
+                for key, num_ensemble in zip(keys, self.num_ensembles)
+            ]
         )
 
     def batched(self, key: base.RngKey, num_samples: int) -> base.Index:
@@ -115,6 +125,7 @@ class ScaledGaussianIndexer(base.EpistemicIndexer):
             / jnp.sqrt(self.index_dim)
             * jax.random.normal(key, shape=[self.index_dim])
         )
+
 
 @dataclasses.dataclass
 class GaussianWithUnitIndexer(base.EpistemicIndexer):

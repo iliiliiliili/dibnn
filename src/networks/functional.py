@@ -32,11 +32,14 @@ class BatchedFunctionalLinear(FunctionalBase):
         super().__init__()
 
         def layer(inputs, weights, biases=None):
+            """inputs: [B, in_features]
+            weights: [weight_batch, out_features, in_features]
+            biases: [weight_batch, out_features]"""
             result = inputs @ weights.mT
 
             if biases is not None:
                 result = result + biases.unsqueeze(1)
-            
+
             return result
 
         # layer = lambda inputs, weights: torch.nn.functional.linear(
@@ -52,16 +55,16 @@ class BatchedFunctionalLinear(FunctionalBase):
 
 class FunctionalMLP(nn.Module):
 
-    def __init__(
-        self, activation: Callable = torch.relu
-    ) -> None:
+    def __init__(self, activation: Callable = torch.relu) -> None:
 
         super().__init__()
-        
+
         self.layer = BatchedFunctionalLinear()
         self.activation = activation
-    
-    def forward(self, inputs: torch.Tensor, weights: List[Tuple[torch.Tensor, ...]]) -> torch.Tensor:
+
+    def forward(
+        self, inputs: torch.Tensor, weights: List[Tuple[torch.Tensor, ...]]
+    ) -> torch.Tensor:
         x = inputs
         for i, layer_weights in enumerate(weights):
             x = self.layer(x, layer_weights)
@@ -69,4 +72,3 @@ class FunctionalMLP(nn.Module):
             if i < len(weights) - 1:
                 x = self.activation(x)
         return x
-

@@ -65,9 +65,10 @@ class WeightFn(typing_extensions.Protocol):
     """Interface for weight-generating functions."""
 
     def __call__(
-        self, rng_key: base.RngKey, indices: Optional[Sequence[int]] = None,
-    ) -> jnp.DeviceArray:
-        ...
+        self,
+        rng_key: base.RngKey,
+        indices: Optional[Sequence[int]] = None,
+    ) -> jnp.DeviceArray: ...
 
 
 DISTRIBUTIONS = {
@@ -161,13 +162,13 @@ def _make_key(data_index: base.Array, seed: int) -> base.RngKey:
 def _make_ensemble_bootstrap_fn(weight_fn: WeightFn, seed: int = 0) -> BootstrapFn:
     """Factory method to create bootstrapping function with ensemble index.
 
-  Args:
-    weight_fn: weight distribution function e.g. jax.random.exponential.
-    seed: Optional integer added to the data_keys
+    Args:
+      weight_fn: weight distribution function e.g. jax.random.exponential.
+      seed: Optional integer added to the data_keys
 
-  Returns:
-    BootstrapFn appropriate for ensemble = assumes integer index.
-  """
+    Returns:
+      BootstrapFn appropriate for ensemble = assumes integer index.
+    """
     fold_in = jax.vmap(jax.random.fold_in)
     weight_fn = jax.vmap(weight_fn)
 

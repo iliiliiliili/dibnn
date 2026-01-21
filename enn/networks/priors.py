@@ -50,7 +50,9 @@ class EnnWithAdditivePrior(base.EpistemicNetwork):
                 return base.OutputWithPrior(train=net_out, prior=prior)
 
         super().__init__(
-            apply=apply_fn, init=enn.init, indexer=enn.indexer,
+            apply=apply_fn,
+            init=enn.init,
+            indexer=enn.indexer,
         )
 
 
@@ -100,21 +102,21 @@ def make_random_feat_gp(
 ) -> Callable[[base.Array], base.Array]:
     """Generate a random features GP realization via random features.
 
-  This is based on the "random kitchen sink" approximation from Rahimi,Recht.
-  See blog post/paper: http://www.argmin.net/2017/12/05/kitchen-sinks/.
+    This is based on the "random kitchen sink" approximation from Rahimi,Recht.
+    See blog post/paper: http://www.argmin.net/2017/12/05/kitchen-sinks/.
 
-  Args:
-    input_dim: dimension of input.
-    output_dim: dimension of output.
-    num_feat: number of random features used to approximate GP.
-    key: jax random number key.
-    gamma: gaussian kernel variance = gamma^2 (higher = more wiggle).
-      If you pass a tuple we generate uniform between gamma_min, gamma_max.
-    scale: scale of the output in each dimension.
+    Args:
+      input_dim: dimension of input.
+      output_dim: dimension of output.
+      num_feat: number of random features used to approximate GP.
+      key: jax random number key.
+      gamma: gaussian kernel variance = gamma^2 (higher = more wiggle).
+        If you pass a tuple we generate uniform between gamma_min, gamma_max.
+      scale: scale of the output in each dimension.
 
-  Returns:
-    A callable gp_instance: inputs -> outputs in jax.
-  """
+    Returns:
+      A callable gp_instance: inputs -> outputs in jax.
+    """
     weights_key, bias_key, alpha_key, gamma_key = jax.random.split(key, num=4)
     weights = jax.random.normal(weights_key, shape=[num_feat, input_dim, output_dim])
     bias = 2 * jnp.pi * jax.random.uniform(bias_key, shape=[1, num_feat, output_dim])
@@ -141,21 +143,21 @@ def get_random_mlp_with_index(
 ) -> PriorFn:
     """Construct a prior func f(x, z) based on a random MLP.
 
-  The returned function assumes the data input, x, to include a batch dimension
-  but the index input, z, to not include a batch dimension.
+    The returned function assumes the data input, x, to include a batch dimension
+    but the index input, z, to not include a batch dimension.
 
-  Args:
-    x_sample: a sample data input.
-    z_sample: a sample index input.
-    rng: PRNG key.
-    prior_output_sizes: output sizes for the MLP.
-    prior_weight_std: unscaled std of the random weights. The actual std is
-      scaled by 1/sqrt{n} where n is the fan-in (truncated noraml at 2 sigma).
-    prior_bias_std: std of the random biases (truncated noraml at 2 sigma).
+    Args:
+      x_sample: a sample data input.
+      z_sample: a sample index input.
+      rng: PRNG key.
+      prior_output_sizes: output sizes for the MLP.
+      prior_weight_std: unscaled std of the random weights. The actual std is
+        scaled by 1/sqrt{n} where n is the fan-in (truncated noraml at 2 sigma).
+      prior_bias_std: std of the random biases (truncated noraml at 2 sigma).
 
-  Returns:
-    a random function of two inputs x, and z.
-  """
+    Returns:
+      a random function of two inputs x, and z.
+    """
 
     if prior_output_sizes is None:
         prior_output_sizes = [10, 10, 1]

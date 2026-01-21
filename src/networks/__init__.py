@@ -25,13 +25,7 @@ from src.networks.dropout import MLPDropoutENN
 from src.networks.bbb import MlpBbbEnn
 
 # Ensemble
-from src.networks.ensembles import Ensemble
-from src.networks.ensembles import make_mlp_ensemble_prior_fns
-from src.networks.ensembles import MLPEnsembleArbitraryPrior
-from src.networks.ensembles import MLPEnsembleEnn
-from src.networks.ensembles import MLPEnsembleGpPrior
-from src.networks.ensembles import MLPEnsembleMatchedPrior
-from src.networks.ensembles import wrap_sequence_as_prior
+from src.networks.ensembles import MlpEnsembleEnnWithAdditivePrior
 
 # Layer Ensemble
 from src.networks.layer_ensembles import LayerEnsembleNetworkWithPriors

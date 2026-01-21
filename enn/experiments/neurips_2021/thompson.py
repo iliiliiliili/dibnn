@@ -156,7 +156,10 @@ class ThompsonEnnBandit:
             self.total_regret += regret
             if self.num_steps % log_freq == 0:
                 self.logger.write(
-                    {"total_regret": self.total_regret, "t": self.num_steps,}
+                    {
+                        "total_regret": self.total_regret,
+                        "t": self.num_steps,
+                    }
                 )
             for _ in range(self._steps_per_obs):
                 if self.num_steps <= self._batch_size:

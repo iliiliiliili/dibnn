@@ -38,10 +38,10 @@ class TrainingState(NamedTuple):
 class MultilossTrainer:
     """Specify the training schedule for a given loss/dataset.
 
-  For step=1,2,...:
-    If should_train(step):
-      Apply one step of loss_fn on a batch = next(dataset).
-  """
+    For step=1,2,...:
+      If should_train(step):
+        Apply one step of loss_fn on a batch = next(dataset).
+    """
 
     loss_fn: base.LossFn  # Loss function
     dataset: base.BatchIterator  # Dataset to pull batch from
@@ -56,16 +56,16 @@ PureLoss = Callable[[hk.Params, base.Batch, base.RngKey], base.Array]
 class MultilossExperiment(supervised_base.BaseExperiment):
     """Class to handle supervised training with multiple losses.
 
-  At each step=1,2,...:
-    For t in trainers:
-      If t.should_train(step):
-        Apply one step of t.loss_fn on batch = next(t.dataset)
+    At each step=1,2,...:
+      For t in trainers:
+        If t.should_train(step):
+          Apply one step of t.loss_fn on batch = next(t.dataset)
 
-  This can be useful for settings like "prior_loss" or transfer learning.
+    This can be useful for settings like "prior_loss" or transfer learning.
 
-  Optional eval_datasets which is a collection of datasets to *evaluate*
-  the loss on every eval_log_freq steps.
-  """
+    Optional eval_datasets which is a collection of datasets to *evaluate*
+    the loss on every eval_log_freq steps.
+    """
 
     def __init__(
         self,
@@ -109,7 +109,10 @@ class MultilossExperiment(supervised_base.BaseExperiment):
             metrics.update({"loss": loss})
             updates, new_opt_state = optimizer.update(grads, state.opt_state)
             new_params = optax.apply_updates(state.params, updates)
-            new_state = TrainingState(params=new_params, opt_state=new_opt_state,)
+            new_state = TrainingState(
+                params=new_params,
+                opt_state=new_opt_state,
+            )
             return new_state, metrics
 
         self._sgd_step = jax.jit(sgd_step, static_argnums=0)

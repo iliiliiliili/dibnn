@@ -80,12 +80,15 @@ def make_dropout_ctor(
 ) -> testbed_base.TestbedAgent:
     """Factory for creating a dropout-based agent."""
 
-    def enn_ctor(prior: testbed_base.PriorKnowledge):
-        output_sizes = [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+    def enn_ctor(prior: testbed_base.PriorKnowledge, use_double_precision: bool = False):
+        output_sizes = (
+            [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        )
         return networks.MLPDropoutENN(
             output_sizes=output_sizes,
             dropout_rate=dropout_rate,
             dropout_input=dropout_input,
+            use_double_precision=use_double_precision,
         )
 
     def optimizer_ctor(params):
@@ -121,11 +124,14 @@ def make_bbb_ctor(
 ) -> ConfigCtor:
     """Generate an ensemble agent config."""
 
-    def enn_ctor(prior: testbed_base.PriorKnowledge):
-        output_sizes = [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+    def enn_ctor(prior: testbed_base.PriorKnowledge, use_double_precision: bool = True):
+        output_sizes = (
+            [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        )
         return networks.MlpBbbEnn(
             output_sizes=output_sizes,
             sigma_0=sigma_0,
+            use_double_precision=use_double_precision,
         )
 
     def optimizer_ctor(params):
@@ -146,6 +152,47 @@ def make_bbb_ctor(
 
     return make_agent_config
 
+
+def make_ensemble_ctor(
+    num_ensemble: int,
+    noise_scale: float,
+    prior_scale: float,
+    learning_rate: float,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    training_steps: Optional[int] = None,
+    batch_size: Optional[int] = None,
+) -> ConfigCtor:
+    """Generate an ensemble agent config."""
+
+    def enn_ctor(prior: testbed_base.PriorKnowledge, use_double_precision: bool = True):
+        output_sizes = (
+            [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        )
+        return networks.MlpEnsembleEnnWithAdditivePrior(
+            output_sizes=output_sizes,
+            num_ensemble=num_ensemble,
+            prior_scale=prior_scale,
+            use_double_precision=use_double_precision,
+        )
+
+    def optimizer_ctor(params):
+        return optim.Adam(params, lr=learning_rate)
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        config = agents.VanillaEnnConfig(
+            enn_ctor=enn_ctor,
+            loss_ctor=enn_losses.gaussian_regression_loss(
+                num_ensemble, noise_scale, l2_weight_decay=0
+            ),
+            optimizer_ctor=optimizer_ctor,
+            training_steps=training_steps,
+            batch_size=batch_size,
+        )
+
+        return config
+
+    return make_agent_config
 
 
 def make_layer_ensemble_agent(
@@ -271,21 +318,23 @@ def make_bbb_sweep() -> List[AgentCtorConfig]:
         for learning_rate in [1e-3, 3e-4, 1e-4]:
             for num_layers in [2, 3]:
                 for hidden_size in [50, 100]:
-                    settings = {
-                        "agent": "bbb",
-                        "sigma_0": sigma_0,
-                        "learning_rate": learning_rate,
-                        "num_layers": num_layers,
-                        "hidden_size": hidden_size,
-                    }
-                    config_ctor = make_bbb_ctor(
-                        sigma_0, learning_rate, hidden_size, num_layers
-                    )
-                    sweep.append(AgentCtorConfig(settings, config_ctor))
+                    for training_steps in [1000]:
+                        settings = {
+                            "agent": "bbb",
+                            "sigma_0": sigma_0,
+                            "learning_rate": learning_rate,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                        }
+                        config_ctor = make_bbb_ctor(
+                            sigma_0, learning_rate, hidden_size, num_layers, training_steps=training_steps
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
 
     return sweep
 
-def make_bbb_selected_sweep() -> List[AgentCtorConfig]:
+
+def make_bbb_selected_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
 
@@ -294,17 +343,24 @@ def make_bbb_selected_sweep() -> List[AgentCtorConfig]:
         for learning_rate in [1e-3, 1e-4]:
             for num_layers in [2, 3]:
                 for hidden_size in [50, 100]:
-                    settings = {
-                        "agent": "bbb",
-                        "sigma_0": sigma_0,
-                        "learning_rate": learning_rate,
-                        "num_layers": num_layers,
-                        "hidden_size": hidden_size,
-                    }
-                    config_ctor = make_bbb_ctor(
-                        sigma_0, learning_rate, hidden_size, num_layers, training_steps=2000
-                    )
-                    sweep.append(AgentCtorConfig(settings, config_ctor))
+                    for training_steps in [1000, 1500]:
+                        settings = {
+                            "agent": "bbb",
+                            "sigma_0": sigma_0,
+                            "learning_rate": learning_rate,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                            "training_steps": training_steps,
+                        }
+                        config_ctor = make_bbb_ctor(
+                            sigma_0,
+                            learning_rate,
+                            hidden_size,
+                            num_layers,
+                            training_steps=training_steps,
+                            batch_size=1000 if reduce_batch else None,
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
 
     return sweep
 
@@ -333,27 +389,69 @@ def make_bbb_debug() -> List[AgentCtorConfig]:
     return sweep
 
 
-def make_agent_sweep(agent: str = "all") -> Sequence[AgentCtorConfig]:
+def make_ensemble_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting ensemble agents
+    for num_ensemble in [3, 10, 30]:
+    # for num_ensemble in [1, 3, 10, 30]:
+        for noise_scale in [0, 1]:
+            for prior_scale in [0, 1]:
+                for num_layers in [2, 3]:
+                    for hidden_size in [50]:
+                        for learning_rate in [1e-3]:
+                            # for training_steps in [1000, 1500, 2000, 3000]:
+                            for training_steps in [1000]:
+                                settings = {
+                                    "agent": "ensemble",
+                                    "num_ensemble": num_ensemble,
+                                    "noise_scale": noise_scale,
+                                    "prior_scale": prior_scale,
+                                    "num_layers": num_layers,
+                                    "hidden_size": hidden_size,
+                                    "learning_rate": learning_rate,
+                                    "training_steps": training_steps,
+                                }
+                                config_ctor = make_ensemble_ctor(
+                                    num_ensemble = num_ensemble,
+                                    noise_scale = noise_scale,
+                                    prior_scale = prior_scale,
+                                    learning_rate = learning_rate,
+                                    hidden_size = hidden_size,
+                                    num_layers = num_layers,
+                                    training_steps=training_steps,
+                                    # batch_size=100,
+                                )
+                                sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
+
+def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCtorConfig]:
 
     if agent == "all":
-        agent_sweep = make_dropout_sweep() + make_bbb_sweep
+        agent_sweep = make_dropout_sweep() + make_bbb_sweep() + make_ensemble_sweep()
     elif agent == "dropout":
         agent_sweep = make_dropout_sweep()
     elif agent == "bbb":
-        agent_sweep = make_bbb_selected_sweep()
+        agent_sweep = make_bbb_selected_sweep(reduce_batch=reduce_batch)
     elif agent == "bbb_debug":
         agent_sweep = make_bbb_debug()
+    elif agent == "ensemble":
+        agent_sweep = make_ensemble_sweep()
     else:
         raise ValueError(f"agent={agent} is not valid!")
 
     return tuple(agent_sweep)
 
 
-def load_agent_config(agent_id: int, agent: str = "all") -> agents.VanillaEnnConfig:
-    sweep = make_agent_sweep(agent)
+def load_agent_config(agent_id: int, agent: str = "all", reduce_batch=False) -> agents.VanillaEnnConfig:
+    sweep = make_agent_sweep(agent, reduce_batch=reduce_batch)
     return sweep[agent_id]
 
 
-def load_agent_config_sweep(agent: str = "all"):
-    sweep = make_agent_sweep(agent)
+def load_agent_config_sweep(agent: str = "all", reduce_batch=False):
+    sweep = make_agent_sweep(agent, reduce_batch=reduce_batch)
     return sweep

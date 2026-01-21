@@ -108,7 +108,9 @@ def vstack(img_list):
     # create a new array with a size large enough to contain all the images
     final_image = np.ones((total_height, max_width, 3), dtype=np.uint8) * 255
 
-    current_y = 0  # keep track of where your current image was last placed in the y coordinate
+    current_y = (
+        0  # keep track of where your current image was last placed in the y coordinate
+    )
     for image in img_list:
         # add an image to the final array and increment the y coordinate
         image = np.hstack(
@@ -117,6 +119,7 @@ def vstack(img_list):
         final_image[current_y : current_y + image.shape[0], :, :] = image
         current_y += image.shape[0]
     return final_image
+
 
 def hstack(img_list):
     max_height = 0
@@ -129,7 +132,9 @@ def hstack(img_list):
     # create a new array with a size large enough to contain all the images
     final_image = np.ones((max_height, total_width, 3), dtype=np.uint8) * 255
 
-    current_x = 0  # keep track of where your current image was last placed in the y coordinate
+    current_x = (
+        0  # keep track of where your current image was last placed in the y coordinate
+    )
     for image in img_list:
         # add an image to the final array and increment the y coordinate
         image = np.vstack(
@@ -143,38 +148,22 @@ def hstack(img_list):
 def plot_single_frame(training_frame, testing_frame, output_file_name):
 
     plot_train = ggplot(training_frame) + aes(x="step", y="loss") + geom_line()
-    plot_train.save(
-        "plots/single/sub/" + output_file_name + "_train.png", dpi=600
-    )
-    plot_test_kl = (
-        ggplot(testing_frame) + aes(x="step", y="kl_estimate") + geom_line()
-    )
-    plot_test_kl.save(
-        "plots/single/sub/" + output_file_name + "_test_kl.png", dpi=600
-    )
-    plot_test_mean = (
-        ggplot(testing_frame) + aes(x="step", y="mean_error") + geom_line()
-    )
+    plot_train.save("plots/single/sub/" + output_file_name + "_train.png", dpi=600)
+    plot_test_kl = ggplot(testing_frame) + aes(x="step", y="kl_estimate") + geom_line()
+    plot_test_kl.save("plots/single/sub/" + output_file_name + "_test_kl.png", dpi=600)
+    plot_test_mean = ggplot(testing_frame) + aes(x="step", y="mean_error") + geom_line()
     plot_test_mean.save(
         "plots/single/sub/" + output_file_name + "_test_mean.png", dpi=600
     )
-    plot_test_std = (
-        ggplot(testing_frame) + aes(x="step", y="std_error") + geom_line()
-    )
+    plot_test_std = ggplot(testing_frame) + aes(x="step", y="std_error") + geom_line()
     plot_test_std.save(
         "plots/single/sub/" + output_file_name + "_test_std.png", dpi=600
     )
 
-    img_train = cv2.imread(
-        "plots/single/sub/" + output_file_name + "_train.png"
-    )
+    img_train = cv2.imread("plots/single/sub/" + output_file_name + "_train.png")
     img_kl = cv2.imread("plots/single/sub/" + output_file_name + "_test_kl.png")
-    img_mean = cv2.imread(
-        "plots/single/sub/" + output_file_name + "_test_mean.png"
-    )
-    img_std = cv2.imread(
-        "plots/single/sub/" + output_file_name + "_test_std.png"
-    )
+    img_mean = cv2.imread("plots/single/sub/" + output_file_name + "_test_mean.png")
+    img_std = cv2.imread("plots/single/sub/" + output_file_name + "_test_std.png")
 
     total_img = hstack(
         [

@@ -29,20 +29,14 @@ from src.networks import priors
 from src.networks.functional import FunctionalMLP
 
 
-
-
-
-
-
-
 class MLP(nn.Module):
     """Simple MLP implementation."""
-    
+
     def __init__(
-        self, 
+        self,
         output_sizes: Sequence[int],
         w_init: Optional[Callable] = None,
-        b_init: Optional[Callable] = None
+        b_init: Optional[Callable] = None,
     ):
         super().__init__()
         self.output_sizes = output_sizes
@@ -55,7 +49,7 @@ class MLP(nn.Module):
         self._w_init = w_init
         self._b_init = b_init
         self._initialized = False
-        
+
     def _lazy_init(self, input_size: int):
         """Initialize layers when input size is known."""
         if self._initialized:
@@ -72,11 +66,11 @@ class MLP(nn.Module):
             prev_size = size
         self.layers = nn.ModuleList(layers)
         self._initialized = True
-        
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not self._initialized:
             self._lazy_init(x.shape[-1])
-        
+
         for i, layer in enumerate(self.layers):
             x = layer(x)
             if i < len(self.layers) - 1:
@@ -107,7 +101,7 @@ class DiagonalLinear(nn.Module):
         self.with_bias = with_bias
         self._w_init = w_init
         self._b_init = b_init
-        
+
         if input_size is not None:
             self._initialize_parameters()
         else:
@@ -122,7 +116,7 @@ class DiagonalLinear(nn.Module):
         else:
             self.w = nn.Parameter(torch.empty(self.input_size))
             self._w_init(self.w)
-            
+
         if self.with_bias:
             if self._b_init is None:
                 self.b = nn.Parameter(torch.zeros(self.input_size))
@@ -150,7 +144,7 @@ class DiagonalLinear(nn.Module):
 
 class HypermodelModule(nn.Module):
     """Hypermodel that generates parameters for a base network."""
-    
+
     def __init__(
         self,
         base_model: nn.Module,
@@ -160,7 +154,7 @@ class HypermodelModule(nn.Module):
         scale: bool = True,
     ):
         """Initialize hypermodel.
-        
+
         Args:
             base_model: Base network whose parameters will be generated.
             hyper_torso: Transformation of index before final layer.
@@ -174,18 +168,17 @@ class HypermodelModule(nn.Module):
         self.diagonal_linear_hyper = diagonal_linear_hyper
         self.return_generated_params = return_generated_params
         self.scale = scale
-        
-        
+
         self.param_shapes = OrderedDict()
         self.param_sizes = OrderedDict()
         total_params = 0
-        
+
         for name, param in base_model.named_parameters():
             self.param_shapes[name] = param.shape
             size = param.numel()
             self.param_sizes[name] = size
             total_params += size
-        
+
         # Create hyper network layers
         if diagonal_linear_hyper:
             self.hyper_final = DiagonalLinear(input_size=total_params)
@@ -195,9 +188,9 @@ class HypermodelModule(nn.Module):
             for name, size in self.param_sizes.items():
                 # Layer will be created on first forward when we know hyper_torso output size
                 self.hyper_layers[name] = None
-        
+
         self._initialized = False
-        
+
     def _lazy_init_hyper_layers(self, hyper_index_size: int):
         """Initialize hyper layers when index size is known."""
         if self._initialized or self.diagonal_linear_hyper:
@@ -205,26 +198,28 @@ class HypermodelModule(nn.Module):
         for name, size in self.param_sizes.items():
             self.hyper_layers[name] = nn.Linear(hyper_index_size, size)
         self._initialized = True
-        
-    def scale_params(self, params_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+
+    def scale_params(
+        self, params_dict: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
         """Scale parameters for variance stability."""
         scaled = {}
         for name, value in params_dict.items():
             # Scale weights by 1/sqrt(fan_in), leave biases unchanged
-            if 'weight' in name or name.endswith('.w'):
+            if "weight" in name or name.endswith(".w"):
                 fan_in = value.shape[0] if len(value.shape) > 0 else 1
                 scaled[name] = value / np.sqrt(fan_in)
             else:
                 scaled[name] = value
         return scaled
-    
+
     def forward(self, inputs: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """Forward pass through hypermodel.
-        
+
         Args:
             inputs: Input to base network.
             index: Epistemic index for parameter generation.
-            
+
         Returns:
             Output of base network with generated parameters.
         """
@@ -233,55 +228,60 @@ class HypermodelModule(nn.Module):
             hyper_index = index
         else:
             hyper_index = self.hyper_torso(index)
-        
+
         # Generate parameters
         if self.diagonal_linear_hyper:
             # Generate all parameters at once
             flat_params = self.hyper_final(index)
-            
+
             # Split into individual parameters
             generated_params = {}
             start_idx = 0
             for name, size in self.param_sizes.items():
-                param_flat = flat_params[start_idx:start_idx + size]
+                param_flat = flat_params[start_idx : start_idx + size]
                 generated_params[name] = param_flat.view(self.param_shapes[name])
                 start_idx += size
         else:
             # Initialize layers if needed
             if not self._initialized:
                 self._lazy_init_hyper_layers(hyper_index.shape[-1])
-            
+
             # Generate parameters using separate layers
             generated_params = {}
             for name, layer in self.hyper_layers.items():
                 param_flat = layer(hyper_index)
                 generated_params[name] = param_flat.view(self.param_shapes[name])
-        
+
         # Scale parameters if requested
         if self.scale:
             generated_params = self.scale_params(generated_params)
-        
+
         # Apply generated parameters to base model
         # We need to temporarily override the base model's parameters
-        original_params = {name: param.data.clone() 
-                          for name, param in self.base_model.named_parameters()}
-        
+        original_params = {
+            name: param.data.clone()
+            for name, param in self.base_model.named_parameters()
+        }
+
         try:
             # Set generated parameters
             for name, param in self.base_model.named_parameters():
                 param.data = generated_params[name]
-            
+
             # Forward through base model
             output = self.base_model(inputs)
-            
+
             if self.return_generated_params:
                 return base.OutputWithPrior(
                     train=output,
                     extra={
                         "hyper_net_out": generated_params,
-                        "base_net_params": generated_params if not self.scale 
-                                         else self.scale_params(generated_params),
-                    }
+                        "base_net_params": (
+                            generated_params
+                            if not self.scale
+                            else self.scale_params(generated_params)
+                        ),
+                    },
                 )
             return output
         finally:
@@ -305,7 +305,7 @@ class MLPHypermodel(base.EpistemicNetwork):
         b_init: Optional[Callable] = None,
     ):
         """MLP hypermodel for base network as EpistemicNetwork.
-        
+
         Args:
             base_model: Base PyTorch model.
             dummy_input: Example input for shape inference.
@@ -317,15 +317,15 @@ class MLPHypermodel(base.EpistemicNetwork):
             b_init: Bias initializer.
         """
         super().__init__()
-        
+
         self.indexer = indexer
-        
+
         # Create hyper torso
         if hidden_sizes is None:
             hyper_torso = nn.Identity()
         else:
             hyper_torso = MLP(hidden_sizes, w_init=w_init, b_init=b_init)
-        
+
         # Create hypermodel module
         self.module = HypermodelModule(
             base_model=base_model,
@@ -334,11 +334,11 @@ class MLPHypermodel(base.EpistemicNetwork):
             return_generated_params=return_generated_params,
             scale=scale,
         )
-    
+
     def forward(self, inputs: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         return self.module(inputs, index)
-    
+
     def __call__(self, inputs: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """Call method for compatibility."""
         return self.forward(inputs, index)
@@ -363,7 +363,7 @@ class MLPHypermodelWithHypermodelPrior(base.EpistemicNetwork):
         scale: bool = True,
     ):
         """MLP hypermodel with hypermodel prior as EpistemicNetwork.
-        
+
         Args:
             base_output_sizes: Output sizes for base MLP.
             prior_scale: Scale factor for prior.
@@ -379,15 +379,15 @@ class MLPHypermodelWithHypermodelPrior(base.EpistemicNetwork):
             scale: Whether to scale parameters.
         """
         super().__init__()
-        
+
         self.indexer = indexer
-        
+
         # Create base model
         base_model = MLP(base_output_sizes, w_init=w_init, b_init=b_init)
-        
+
         # Create prior base model
         prior_base_model = MLP(prior_base_output_sizes, w_init=w_init, b_init=b_init)
-        
+
         # Create prior ENN
         prior_enn = MLPHypermodel(
             base_model=prior_base_model,
@@ -399,11 +399,11 @@ class MLPHypermodelWithHypermodelPrior(base.EpistemicNetwork):
             b_init=b_init,
             scale=scale,
         )
-        
+
         # Convert to prior function
         torch.manual_seed(seed)
         prior_fn = priors.convert_enn_to_prior_fn(prior_enn, dummy_input)
-        
+
         # Create main ENN without prior
         enn_wo_prior = MLPHypermodel(
             base_model=base_model,
@@ -415,12 +415,12 @@ class MLPHypermodelWithHypermodelPrior(base.EpistemicNetwork):
             b_init=b_init,
             scale=scale,
         )
-        
+
         # Wrap with additive prior
         self.enn = priors.EnnWithAdditivePrior(
             enn_wo_prior, prior_fn, prior_scale=prior_scale
         )
-    
+
     def forward(self, inputs: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         return self.enn(inputs, index)
@@ -443,7 +443,7 @@ class HyperLinear(nn.Module):
         fixed_bias_val: float = 0.0,
     ):
         """Initialize HyperLinear.
-        
+
         Args:
             output_size: Output dimension.
             index_dim_per_layer: Index dimension for this layer.
@@ -457,7 +457,7 @@ class HyperLinear(nn.Module):
         self.weight_scaling = weight_scaling
         self.bias_scaling = bias_scaling
         self.fixed_bias_val = fixed_bias_val
-        
+
         # Parameters will be initialized on first forward
         self.w = None
         self.b = None
@@ -467,52 +467,50 @@ class HyperLinear(nn.Module):
         """Initialize parameters when hidden size is known."""
         if self._initialized:
             return
-        
+
         # Initialize w and b with random normal
         self.w = nn.Parameter(
             torch.randn(self.output_size, hidden_size, self.index_dim_per_layer)
         )
-        self.b = nn.Parameter(
-            torch.randn(self.output_size, self.index_dim_per_layer)
-        )
+        self.b = nn.Parameter(torch.randn(self.output_size, self.index_dim_per_layer))
         self._initialized = True
 
     def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         """Forward pass.
-        
+
         Args:
             x: Input tensor of shape [batch_size, hidden_size].
             z: Index tensor of shape [index_dim_per_layer].
-            
+
         Returns:
             Output tensor of shape [batch_size, output_size].
         """
         batch_size, hidden_size = x.shape
-        
+
         if not self._initialized:
             self._lazy_init(hidden_size)
-        
+
         # Normalize w and b
         w = self.w / torch.norm(self.w, dim=-1, keepdim=True)
         b = self.b / torch.norm(self.b, dim=-1, keepdim=True)
-        
+
         # Scale w and b
         w = w * np.sqrt(self.weight_scaling / hidden_size)
         b = b * np.sqrt(self.bias_scaling) + self.fixed_bias_val
-        
+
         # Generate weights and biases from index
         # w: [output_size, hidden_size, index_dim]
         # z: [index_dim]
         # weights: [output_size, hidden_size]
-        weights = torch.einsum('ohi,i->oh', w, z)
-        bias = torch.einsum('oi,i->o', b, z)
-        
+        weights = torch.einsum("ohi,i->oh", w, z)
+        bias = torch.einsum("oi,i->o", b, z)
+
         # Apply linear transformation
         # x: [batch_size, hidden_size]
         # weights: [output_size, hidden_size]
         # output: [batch_size, output_size]
-        output = torch.einsum('oh,bh->bo', weights, x) + bias
-        
+        output = torch.einsum("oh,bh->bo", weights, x) + bias
+
         return output
 
 
@@ -528,7 +526,7 @@ class PriorMLPIndependentLayers(nn.Module):
         fixed_bias_val: float = 0.0,
     ):
         """Initialize PriorMLPIndependentLayers.
-        
+
         Args:
             output_sizes: Output size for each layer.
             index_dim: Total index dimension.
@@ -540,7 +538,7 @@ class PriorMLPIndependentLayers(nn.Module):
         self.output_sizes = output_sizes
         self.num_layers = len(output_sizes)
         self.index_dim = index_dim
-        
+
         # Determine index splits
         if index_dim < self.num_layers:
             # All layers share the same index
@@ -550,7 +548,7 @@ class PriorMLPIndependentLayers(nn.Module):
             indices_array = np.arange(index_dim)
             splits = np.array_split(indices_array, self.num_layers)
             self.layers_indices = [s.tolist() for s in splits]
-        
+
         # Create layers
         self.layers = nn.ModuleList()
         for layer_indices, output_size in zip(self.layers_indices, output_sizes):
@@ -566,11 +564,11 @@ class PriorMLPIndependentLayers(nn.Module):
 
     def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         """Forward pass.
-        
+
         Args:
             x: Input tensor.
             z: Index tensor of shape [index_dim].
-            
+
         Returns:
             Output tensor.
         """
@@ -579,7 +577,7 @@ class PriorMLPIndependentLayers(nn.Module):
             index_layers = [z] * self.num_layers
         else:
             index_layers = [z[indices] for indices in self.layers_indices]
-        
+
         out = x
         for i, (layer, index_layer) in enumerate(zip(self.layers, index_layers)):
             out = layer(out, index_layer)
@@ -610,7 +608,7 @@ class MLPHypermodelPriorIndependentLayers(base.EpistemicNetwork):
         problem_temperature: Optional[float] = None,
     ):
         """Initialize MLPHypermodelPriorIndependentLayers.
-        
+
         Args:
             base_output_sizes: Output sizes for base network.
             prior_scale: Prior scaling factor.
@@ -629,30 +627,30 @@ class MLPHypermodelPriorIndependentLayers(base.EpistemicNetwork):
             problem_temperature: Temperature scaling for outputs.
         """
         super().__init__()
-        
+
         self.indexer = indexer
         self.problem_temperature = problem_temperature
-        
+
         # Create base model
         class BaseNet(nn.Module):
             def __init__(self, output_sizes, temperature):
                 super().__init__()
                 self.mlp = MLP(output_sizes, w_init=w_init, b_init=b_init)
                 self.temperature = temperature
-            
+
             def forward(self, x):
                 out = self.mlp(x)
                 if self.temperature is not None:
                     out = out / self.temperature
                 return out
-        
+
         base_model = BaseNet(base_output_sizes, problem_temperature)
-        
+
         # Get index dimension
         torch.manual_seed(seed)
         index = indexer(torch.Generator().manual_seed(seed))
         index_dim = index.shape[0]
-        
+
         # Create prior network
         class PriorNet(nn.Module):
             def __init__(self, output_sizes, index_dim, temperature):
@@ -665,24 +663,24 @@ class MLPHypermodelPriorIndependentLayers(base.EpistemicNetwork):
                     fixed_bias_val=prior_fixed_bias_val,
                 )
                 self.temperature = temperature
-            
+
             def forward(self, x, z):
                 out = self.prior_mlp(x, z)
                 if self.temperature is not None:
                     out = out / self.temperature
                 return out
-        
+
         prior_net = PriorNet(prior_base_output_sizes, index_dim, problem_temperature)
-        
+
         # Initialize prior network
         torch.manual_seed(seed)
         with torch.no_grad():
             _ = prior_net(dummy_input, index)
-        
+
         # Create prior function
         def prior_fn(x, z):
             return prior_net(x, z)
-        
+
         # Create main ENN without prior
         enn_wo_prior = MLPHypermodel(
             base_model=base_model,
@@ -694,12 +692,12 @@ class MLPHypermodelPriorIndependentLayers(base.EpistemicNetwork):
             b_init=b_init,
             scale=scale,
         )
-        
+
         # Wrap with additive prior
         self.enn = priors.EnnWithAdditivePrior(
             enn_wo_prior, prior_fn, prior_scale=prior_scale
         )
-    
+
     def forward(self, inputs: torch.Tensor, index: torch.Tensor) -> torch.Tensor:
         """Forward pass."""
         return self.enn(inputs, index)

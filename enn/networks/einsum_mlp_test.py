@@ -27,7 +27,12 @@ from enn.networks import einsum_mlp
 
 class EinsumMlpTest(parameterized.TestCase):
     @parameterized.parameters(
-        [([], 1, True), ([10, 10], 5, True), ([], 1, False), ([10, 10], 5, False),]
+        [
+            ([], 1, True),
+            ([10, 10], 5, True),
+            ([], 1, False),
+            ([10, 10], 5, False),
+        ]
     )
     def test_ensemble(self, hiddens: List[int], num_ensemble: int, regression: bool):
         """Simple test to run just 10 batches."""

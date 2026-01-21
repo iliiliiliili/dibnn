@@ -1,7 +1,5 @@
 # python3
 # pylint: disable=g-bad-file-header
-# Copyright Illia Oleksiienko
-# This file is a modified version for pytorch of the original JAX implementation
 # Copyright 2021 DeepMind Technologies Limited. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""Base classes for data noise process - PyTorch version."""
+"""Base classes for data noise process."""
 
-from src import base
+from enn import base
 import typing_extensions
 
 

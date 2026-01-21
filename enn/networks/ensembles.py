@@ -29,9 +29,9 @@ import jax
 class Ensemble(base.EpistemicModule):
     """Naive discrete ensemble of Haiku modules.
 
-  This implementation assumes *one* integer index per batch, and forwards the
-  entire batch with that index.
-  """
+    This implementation assumes *one* integer index per batch, and forwards the
+    entire batch with that index.
+    """
 
     def __init__(self, ensemble: Sequence[hk.Module]):
         super().__init__(name="ensemble")
