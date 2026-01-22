@@ -29,7 +29,7 @@ import torch
 import torch.nn as nn
 
 from src.networks.functional import BatchedFunctionalLinear
-
+from src.networks.priors import ModelWithPrior
 
 
 class MlpEnsembleEnn(base.EpistemicNetwork):
@@ -113,26 +113,6 @@ class MlpEnsembleEnn(base.EpistemicNetwork):
             return model
 
         super().__init__(apply_fn, init_fn, indexer_fn)
-
-
-class ModelWithPrior(nn.Module):
-    def __init__(self, model: nn.Module, prior_model: nn.Module, prior_scale: float):
-        super().__init__()
-        self.model = model
-        self.prior_model = prior_model
-        self.prior_scale = prior_scale
-
-    def forward(self, x: torch.Tensor, index: base.Index) -> base.Output:
-
-        output = self.model(x, index)
-
-        with torch.no_grad():
-            if self.prior_scale == 0:
-                output_prior = torch.zeros_like(output)
-            else:
-                output_prior = self.prior_model(x, index) * self.prior_scale
-
-        return base.OutputWithPrior(train=output, prior=output_prior)
 
 
 class MlpEnsembleEnnWithAdditivePrior(base.EpistemicNetwork):

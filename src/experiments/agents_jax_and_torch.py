@@ -437,9 +437,9 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
 
         # write_jax_to_torch_ensembles(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
         # compare_jax_and_torch_ensemble_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
-        
+
         # write_jax_to_torch_dropout(jax_state.params, torch_model, device, self.use_double_precision)
-        compare_jax_and_torch_dropout_weights(jax_state.params, torch_model, device, self.use_double_precision)
+        # compare_jax_and_torch_dropout_weights(jax_state.params, torch_model, device, self.use_double_precision)
 
         # external_jax_experiment.state = jax_state
         # external_jax_experiment._loss = jax_partial_loss_fn
@@ -466,11 +466,11 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             # torch_batch = jax_to_torch_batch
             # jax_batch = torch_to_jax_batch
 
+            jax_loss_again = jax_loss_fn(jax_enn, jax_state.params, jax_batch, jax_next_rng)
             (jax_loss, jax_metrics), jax_grads = jax.value_and_grad(jax_partial_loss_fn, has_aux=True)(
                 jax_state.params, jax_batch, jax_next_rng
             )
-            # jax_loss_again = jax_loss_fn(jax_enn, jax_state.params, jax_batch, jax_next_rng)
-            # assert (jax_loss - jax_loss_again[0]) < 0.0001
+            assert (jax_loss - jax_loss_again[0]) < 0.0001
             jax_metrics.update({"loss": jax_loss})
             jax_updates, jax_new_opt_state = jax_optimizer.update(jax_grads, jax_state.opt_state)
             new_params = optax.apply_updates(jax_state.params, jax_updates)

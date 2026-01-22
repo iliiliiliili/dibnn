@@ -23,6 +23,7 @@
 from src.networks.dropout import MLPDropoutENN
 
 from src.networks.bbb import MlpBbbEnn
+from src.networks.linear_hypermodels import MlpLinearHypermodelEnn, MlpLinearHypermodelEnnWithAdditivePrior
 
 # Ensemble
 from src.networks.ensembles import MlpEnsembleEnnWithAdditivePrior
@@ -44,11 +45,11 @@ from src.networks.indexers import GaussianWithUnitIndexer
 from src.networks.indexers import PrngIndexer
 from src.networks.indexers import ScaledGaussianIndexer
 
-# Priors
-from src.networks.priors import convert_enn_to_prior_fn
-from src.networks.priors import EnnWithAdditivePrior
-from src.networks.priors import get_random_mlp_with_index
-from src.networks.priors import make_null_prior
-from src.networks.priors import make_random_feat_gp
-from src.networks.priors import NetworkWithAdditivePrior
-from src.networks.priors import PriorFn
+# # Priors
+# from src.networks.priors import convert_enn_to_prior_fn
+# from src.networks.priors import EnnWithAdditivePrior
+# from src.networks.priors import get_random_mlp_with_index
+# from src.networks.priors import make_null_prior
+# from src.networks.priors import make_random_feat_gp
+# from src.networks.priors import NetworkWithAdditivePrior
+# from src.networks.priors import PriorFn

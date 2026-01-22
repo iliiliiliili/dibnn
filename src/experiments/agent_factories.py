@@ -153,6 +153,49 @@ def make_bbb_ctor(
     return make_agent_config
 
 
+def make_hypermodel_ctor(
+    index_dim: int,
+    noise_scale: float,
+    prior_scale: float,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    num_index_samples: Optional[int] = None,
+    training_steps: Optional[int] = None,
+    batch_size: Optional[int] = None,
+    learning_rate: float = 1e-3,
+) -> ConfigCtor:
+    """Generate an ensemble agent config."""
+
+    def enn_ctor(prior: testbed_base.PriorKnowledge, use_double_precision: bool = True):
+        output_sizes = (
+            [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        )
+        return networks.MlpLinearHypermodelEnnWithAdditivePrior(
+            output_sizes=output_sizes,
+            index_dim=index_dim,
+            prior_scale=prior_scale,
+            use_double_precision=use_double_precision,
+        )
+
+    def optimizer_ctor(params):
+        return optim.Adam(params, lr=learning_rate)
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        config = agents.VanillaEnnConfig(
+            enn_ctor=enn_ctor,
+            loss_ctor=enn_losses.gaussian_regression_loss(
+                num_index_samples, noise_scale, l2_weight_decay=0
+            ),
+            optimizer_ctor=optimizer_ctor,
+            training_steps=training_steps,
+            batch_size=batch_size,
+        )
+
+        return config
+
+    return make_agent_config
+
+
 def make_ensemble_ctor(
     num_ensemble: int,
     noise_scale: float,
@@ -428,6 +471,31 @@ def make_ensemble_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_hypermodel_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting hypermodel agents
+    for index_dim in [5, 10, 20]:
+        for noise_scale in [0, 1]:
+            for prior_scale in [0, 5]:
+                for num_layers in [2, 3]:
+                    for hidden_size in [50]:
+                        settings = {
+                            "agent": "hypermodel",
+                            "index_dim": index_dim,
+                            "noise_scale": noise_scale,
+                            "prior_scale": prior_scale,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                        }
+                        config_ctor = make_hypermodel_ctor(
+                            index_dim, noise_scale, prior_scale, hidden_size, num_layers
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
 
 def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCtorConfig]:
 
@@ -441,6 +509,8 @@ def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCt
         agent_sweep = make_bbb_debug()
     elif agent == "ensemble":
         agent_sweep = make_ensemble_sweep()
+    elif agent == "hypermodel":
+        agent_sweep = make_hypermodel_sweep()
     else:
         raise ValueError(f"agent={agent} is not valid!")
 

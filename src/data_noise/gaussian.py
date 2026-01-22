@@ -93,6 +93,7 @@ def _make_ensemble_gaussian_noise(noise_std: float, seed: int) -> NoiseFn:
         index += data_index
 
         samples = torch.stack([indexed_randn(idx.item(), device) for idx in index.reshape(-1)]).reshape(index.shape) * noise_std
+        samples = samples.T.unsqueeze(-1)
         return samples
 
     return noise_fn
@@ -105,6 +106,7 @@ def _make_layer_ensemble_gaussian_noise(
 
     def noise_fn(data_index: base.DataIndex, input_index: base.Index) -> base.Tensor:
         """Assumes integer index for ensemble."""
+        raise Exception("Not implemented for PyTorch.")
         batch_size = data_index.shape[0]
 
         if len(input_index.shape) > 1:
@@ -131,6 +133,7 @@ def _make_gaussian_index_noise(index_dim: int, noise_std: float, seed: int) -> N
 
     def noise_fn(data_index: base.DataIndex, index: base.Index) -> base.Tensor:
         """Assumes scaled Gaussian index with reserved first component."""
+        raise Exception("Not implemented for PyTorch.")
         batch_size = data_index.shape[0]
         
         generator = torch.Generator()

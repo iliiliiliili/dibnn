@@ -140,12 +140,13 @@ def make_batch_iterator(
     seed: int = 0,
     num_workers: int = 0,
     device: str = "cuda:0",
+    minimum_batch_size: int = 100,
 ) -> base.BatchIterator:
     """Converts toy-like training data to batch_iterator for sgd training."""
     data = _clean_batch_data(data)
     n_data = len(data.y)
     if not batch_size:
-        batch_size = n_data
+        batch_size = max(n_data, minimum_batch_size)
 
     # Convert to torch tensors if needed
     x = (
@@ -169,6 +170,15 @@ def make_batch_iterator(
         else data.weights.to(device)
     )
 
+    # If number of samples is less than minimum_batch_size, repeat elements
+    if n_data < minimum_batch_size:
+        repeat_factor = (minimum_batch_size + n_data - 1) // n_data
+        x = x.repeat(repeat_factor, *([1] * (x.ndim - 1)))
+        y = y.repeat(repeat_factor, *([1] * (y.ndim - 1)))
+        data_index = data_index.repeat(repeat_factor, *([1] * (data_index.ndim - 1)))
+        weights = weights.repeat(repeat_factor, *([1] * (weights.ndim - 1)))
+        n_data = len(x)
+
     dataset = TensorDataset(x, y, data_index, weights)
 
     # Create DataLoader with shuffling
@@ -179,7 +189,7 @@ def make_batch_iterator(
         shuffle=True,
         num_workers=num_workers,
         generator=generator,
-        drop_last=False,
+        drop_last=False
     )
 
     # Create infinite iterator
