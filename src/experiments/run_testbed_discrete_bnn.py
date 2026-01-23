@@ -107,7 +107,7 @@ def main(
                     # Form the appropriate agent for training
                     agent = agents.VanillaEnnAgent(agent_config.config_ctor(), use_double_precision=use_double_precision, fixed_sampler=True)
 
-                    train_seed, all_indices_seed = split_seed(agent_seed, 2)
+                    train_seed, all_indices_seed, best_samples_seed = split_seed(agent_seed, 3)
 
                     # Train
                     enn_sampler = agent(
@@ -128,12 +128,11 @@ def main(
 
                         all_indices = agent.create_all_indices(max_samples, seed=all_indices_seed, device=device)
 
-                        best_samples = problem.find_best_samples(
-                            enn_sampler, all_indices
+                        best_samples_kl = problem.find_best_samples(
+                            enn_sampler, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=False
                         )
-                        
-                        for samples, best_kl_dict in best_samples.items():
 
+                        for samples, best_kl_dict in best_samples_kl.items():
                             kl_quality = best_kl_dict["best_kl"]
                             val_kl_quality = best_kl_dict["best_val_kl"]
                             print(
@@ -169,6 +168,74 @@ def main(
                                     str(agent_id)
                                     + " "
                                     + str(kl_quality.kl_estimate)
+                                    + " "
+                                    + "val_kl="
+                                    + str(val_kl_quality.kl_estimate)
+                                    + " "
+                                    + "mean_error="
+                                    + str(kl_quality.extra["mean_error"])
+                                    + " "
+                                    + "std_error="
+                                    + str(kl_quality.extra["std_error"])
+                                    + " "
+                                    + "indexer="
+                                    + str(samples)
+                                    + " "
+                                    + " ".join(
+                                        [
+                                            str(k) + "=" + str(v)
+                                            for (
+                                                k,
+                                                v,
+                                            ) in agent_config.settings.items()
+                                        ]
+                                    )
+                                    + "\n"
+                                )
+
+                        best_samples_ll = problem.find_best_samples(
+                            enn_sampler, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True
+                        )
+
+                        for samples, best_kl_dict in best_samples_ll.items():
+                            kl_quality = best_kl_dict["best_kl"]
+                            val_ll = best_kl_dict["best_val_log_likelihood"]
+                            print(
+                                f"kl_estimate={kl_quality.kl_estimate}"
+                                + " val_ll="
+                                + str(val_ll)
+                                + " mean_error="
+                                + str(kl_quality.extra["mean_error"])
+                                + " "
+                                + "std_error="
+                                + str(kl_quality.extra["std_error"])
+                            )
+                            all_results.append(kl_quality)
+
+                            with open(
+                                f"{results_folder}/{agent_name}/results_"
+                                + experiment_group
+                                + ("_" if len(experiment_group) > 0 else "")
+                                + agent_name
+                                + "_id"
+                                + str(ind)
+                                + "dr"
+                                + str(dr)
+                                + "ns"
+                                + str(ns)
+                                + "mns"
+                                + str(max_samples)
+                                + "_ll.txt",
+                                "a",
+                            ) as f:
+
+                                f.write(
+                                    str(agent_id)
+                                    + " "
+                                    + str(kl_quality.kl_estimate)
+                                    + " "
+                                    + "val_ll="
+                                    + str(val_ll)
                                     + " "
                                     + "mean_error="
                                     + str(kl_quality.extra["mean_error"])

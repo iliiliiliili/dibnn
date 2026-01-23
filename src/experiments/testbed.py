@@ -21,6 +21,7 @@ for regression problem in closed form.
 """
 
 import dataclasses
+from typing import Callable, Optional
 import torch
 import torch.nn as nn
 from torch.distributions.multivariate_normal import MultivariateNormal
@@ -262,8 +263,11 @@ class TestbedGPRegression(TestbedProblem):
         self,
         enn_sampler: EpistemicSampler,
         all_samples,
+        seed: int,
+        noise_std: float,
         device: str = "cuda:0",
         greedy: bool = True,
+        use_log_likelihood: bool = False,
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
         # Extract useful quantities from the gp sampler.
@@ -284,9 +288,15 @@ class TestbedGPRegression(TestbedProblem):
         posterior_std_val = torch.sqrt(torch.diag(self.data_sampler.val_cov)).to(device)
         posterior_std_val += self.std_ridge
 
+        if use_log_likelihood:
+            torch.manual_seed(seed)
+            y_function_val = MultivariateNormal(posterior_mean_val, self.data_sampler.val_cov.to(device)).sample()
+            y_noise_val = torch.randn(num_val, 1, dtype = y_function_val.dtype, device=device) * noise_std
+            y_val = y_function_val + y_noise_val.squeeze(-1)
+
         enn_samples_val = enn_sampler(x_val, all_samples).squeeze(-1)
 
-        def evaluate_multiple_sets(selected_sample_sets, is_test):
+        def evaluate_multiple_sets_kl(selected_sample_sets, is_test):
 
             if is_test:
                 num = num_test
@@ -316,10 +326,27 @@ class TestbedGPRegression(TestbedProblem):
             errors_mean = torch.mean(torch.abs((posterior_mean - enn_mean) / posterior_mean), dim=1)
             errors_std = torch.mean(torch.abs((posterior_std - enn_std) / posterior_std), dim=1)
 
-
             return kl_estimates, errors_mean, errors_std
 
-        def evaluate_single_set(selected_samples, is_test):
+        def evaluate_multiple_sets_log_likelihood_val(selected_sample_sets):
+            
+            all_enn_samples = enn_samples_val
+
+            # Compute the mean and std of ENN posterior
+            current_enn_samples = torch.stack([all_enn_samples[selected_sample_sets[i]] for i in range(len(selected_sample_sets))])
+            enn_mean = torch.mean(current_enn_samples, dim=1)
+
+            if len(selected_sample_sets[0]) == 1:
+                enn_std = torch.ones_like(enn_mean) + self.std_ridge
+            else:
+                enn_std = torch.std(current_enn_samples, dim=1) + self.std_ridge
+
+            log_likelihoods = gaussian_log_likelihood(y_val, enn_mean, enn_std)
+            log_likelihoods = torch.mean(log_likelihoods, dim=1)
+
+            return log_likelihoods
+
+        def evaluate_single_set_kl(selected_samples, is_test):
 
             if is_test:
                 num = num_test
@@ -366,7 +393,7 @@ class TestbedGPRegression(TestbedProblem):
 
             for i in range(0, len(all_samples)):
                 if i not in best_samples:
-                    kl = evaluate_single_set(
+                    kl = evaluate_single_set_kl(
                         [*best_samples, i], False
                     )
                     if (best_kl is None) or (best_kl.kl_estimate > kl.kl_estimate):
@@ -386,10 +413,7 @@ class TestbedGPRegression(TestbedProblem):
 
             return [*best_samples, best_addition], best_kl
 
-        def add_sample_to_best(best_samples):
-
-            best_kl = None
-            best_addition = None
+        def add_sample_to_best_kl(best_samples):
 
             all_sample_sets = []
 
@@ -397,7 +421,7 @@ class TestbedGPRegression(TestbedProblem):
                 if i not in best_samples:
                     all_sample_sets.append([*best_samples, i])
             
-            kl_results, errors_mean, errors_std = evaluate_multiple_sets(all_sample_sets, False)
+            kl_results, errors_mean, errors_std = evaluate_multiple_sets_kl(all_sample_sets, False)
             best_samples_id = torch.argmin(kl_results)
             best_set = all_sample_sets[best_samples_id]
             best_kl = ENNQuality(
@@ -410,22 +434,51 @@ class TestbedGPRegression(TestbedProblem):
 
             return best_set, best_kl
 
+        def add_sample_to_best_log_likelihood(best_samples):
+
+            all_sample_sets = []
+
+            for i in range(0, len(all_samples)):
+                if i not in best_samples:
+                    all_sample_sets.append([*best_samples, i])
+            
+            log_likelihoods = evaluate_multiple_sets_log_likelihood_val(all_sample_sets)
+            best_samples_id = torch.argmax(log_likelihoods)
+            best_set = all_sample_sets[best_samples_id]
+            best_log_likelihood = log_likelihoods[best_samples_id].item()
+
+            return best_set, best_log_likelihood
+
         def greedy_search():
 
             best_samples = []
 
             for num_samples in range(1, len(all_samples)):
-                best_samples, best_val_kl = add_sample_to_best(best_samples)
-                best_kl = evaluate_single_set([*best_samples], True)
-                print("--", len(best_samples), "kl", best_kl.kl_estimate)
+
+                if use_log_likelihood:
+                    best_samples, best_val_log_likelihood = add_sample_to_best_log_likelihood(best_samples)
+                else:
+                    best_samples, best_val_kl = add_sample_to_best_kl(best_samples)
+
+                best_kl = evaluate_single_set_kl([*best_samples], True)
+
+                if use_log_likelihood:
+                    print("++", len(best_samples), "kl", best_kl.kl_estimate, "val_ll", best_val_log_likelihood)
+                else:
+                    print("--", len(best_samples), "kl", best_kl.kl_estimate, "val_kl", best_val_kl.kl_estimate)
 
                 if num_samples > 1:
 
                     results[num_samples] = {
                         "best_samples": best_samples,
                         "best_kl": best_kl,
-                        "best_val_kl": best_val_kl,
                     }
+
+                    if use_log_likelihood:
+                        results[num_samples]["best_val_log_likelihood"] = best_val_log_likelihood
+                    else:
+                        results[num_samples]["best_val_kl"] = best_val_kl
+
             
             return results
     
@@ -545,10 +598,9 @@ def _kl_gaussian(
     frac_term = (std_1**2 + (mean_1 - mean_2) ** 2) / (2 * std_2**2)
     return log_term + frac_term - 0.5
 
-def batched_kl_gaussian(
-    mean_1: float, std_1: float, mean_2: float, std_2: float
+
+def gaussian_log_likelihood(
+    y: float, mean: float, std: float
 ) -> torch.Tensor:
-    """Computes the KL(P_1 || P_2) for P_1,P_2 univariate Gaussian."""
-    log_term = torch.log(std_2 / std_1)
-    frac_term = (std_1**2 + (mean_1 - mean_2) ** 2) / (2 * std_2**2)
-    return log_term + frac_term - 0.5
+    result = -0.5 * torch.log(2 * torch.pi * (std ** 2)) - 0.5 * ((y - mean) ** 2) / (std ** 2)
+    return result

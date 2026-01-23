@@ -42,6 +42,7 @@ class VanillaEnnConfig:
 
     enn_ctor: enn_losses.EnnCtor
     loss_ctor: enn_losses.LossCtor
+    log_likelihood_ctor: bool = False
     optimizer_ctor: Callable = None  # Function returning torch optimizer
     training_steps: Optional[int] = 1000
     batch_size: Optional[int] = None

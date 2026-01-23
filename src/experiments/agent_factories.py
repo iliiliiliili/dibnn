@@ -471,7 +471,7 @@ def make_bbb_debug(reduce_batch=False) -> List[AgentCtorConfig]:
         for learning_rate in [1e-3]:
             for num_layers in [2]:
                 for hidden_size in [50]:
-                    for training_steps in [100]:
+                    for training_steps in [1000]:
                         settings = {
                             "agent": "bbb",
                             "sigma_0": sigma_0,
