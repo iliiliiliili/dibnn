@@ -191,9 +191,6 @@ class TestbedGPRegression(TestbedProblem):
         posterior_std = torch.sqrt(torch.diag(self.data_sampler.test_cov)).to(device)
         posterior_std += self.std_ridge
 
-        # enn_samples = torch.stack(
-        #     [enn_sampler(x_test, i)[:, 0] for i in range(num_samples)]
-        # )
         enn_samples = enn_sampler(x_test, seed, num_samples).squeeze(-1)
 
         assert enn_samples.shape == (num_samples, num_test)
@@ -220,18 +217,23 @@ class TestbedGPRegression(TestbedProblem):
 
         return result
 
-    def evaluate_quality_val(self, enn_sampler: EpistemicSampler) -> ENNQuality:
+    def evaluate_quality_val(
+        self,
+        enn_sampler: EpistemicSampler,
+        seed,
+        num_samples=None,
+        device: str = "cuda:0",
+    ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
-        x_val = self.data_sampler.x_val
+        x_val = self.data_sampler.x_val.to(device)
         num_val = x_val.shape[0]
-        posterior_mean = self.data_sampler.val_mean[:, 0]
-        posterior_std = torch.sqrt(torch.diag(self.data_sampler.val_cov))
+        posterior_mean = self.data_sampler.val_mean[:, 0].to(device)
+        posterior_std = torch.sqrt(torch.diag(self.data_sampler.val_cov)).to(device)
         posterior_std += self.std_ridge
 
-        enn_samples = torch.stack(
-            [enn_sampler(x_val, i)[:, 0] for i in range(self.num_enn_samples)]
-        )
-        assert enn_samples.shape == (self.num_enn_samples, num_val)
+        enn_samples = enn_sampler(x_val, seed, num_samples).squeeze(-1)
+
+        assert enn_samples.shape == (num_samples, num_val)
         enn_mean = torch.mean(enn_samples, dim=0)
         enn_std = torch.std(enn_samples, dim=0) + self.std_ridge
 
@@ -255,42 +257,223 @@ class TestbedGPRegression(TestbedProblem):
 
         return result
 
-    def evaluate_quality_batched(
-        self, batched_sampler: EpistemicSampler, num_samples=None
+
+    def find_best_samples(
+        self,
+        enn_sampler: EpistemicSampler,
+        all_samples,
+        device: str = "cuda:0",
+        greedy: bool = True,
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
-        num_samples = self.num_enn_samples if num_samples is None else num_samples
+        # Extract useful quantities from the gp sampler.
 
-        x_test = self.data_sampler.x_test
+        results = {}
+
+        x_test = self.data_sampler.x_test.to(device)
         num_test = x_test.shape[0]
-        posterior_mean = self.data_sampler.test_mean[:, 0]
-        posterior_std = torch.sqrt(torch.diag(self.data_sampler.test_cov))
-        posterior_std += self.std_ridge
+        posterior_mean_test = self.data_sampler.test_mean[:, 0].to(device)
+        posterior_std_test = torch.sqrt(torch.diag(self.data_sampler.test_cov)).to(device)
+        posterior_std_test += self.std_ridge
 
-        enn_samples = batched_sampler(x_test, num_samples)[:, :, 0]
-        assert enn_samples.shape == (num_samples, num_test)
-        enn_mean = torch.mean(enn_samples, dim=0)
-        enn_std = torch.std(enn_samples, dim=0) + self.std_ridge
+        enn_samples_test = enn_sampler(x_test, all_samples).squeeze(-1)
 
-        kl_estimates = torch.stack(
-            [
-                _kl_gaussian(
-                    posterior_mean[i], posterior_std[i], enn_mean[i], enn_std[i]
-                )
-                for i in range(num_test)
-            ]
-        )
-        kl_estimate = torch.mean(kl_estimates)
+        x_val = self.data_sampler.x_val.to(device)
+        num_val = x_val.shape[0]
+        posterior_mean_val = self.data_sampler.val_mean[:, 0].to(device)
+        posterior_std_val = torch.sqrt(torch.diag(self.data_sampler.val_cov)).to(device)
+        posterior_std_val += self.std_ridge
 
-        error_mean = torch.mean(torch.abs((posterior_mean - enn_mean) / posterior_mean))
-        error_std = torch.mean(torch.abs((posterior_std - enn_std) / posterior_std))
+        enn_samples_val = enn_sampler(x_val, all_samples).squeeze(-1)
 
-        result = ENNQuality(
-            kl_estimate.item(),
-            {"mean_error": error_mean.item(), "std_error": error_std.item()},
-        )
+        def evaluate_multiple_sets(selected_sample_sets, is_test):
 
-        return result
+            if is_test:
+                num = num_test
+                posterior_mean = posterior_mean_test
+                posterior_std = posterior_std_test
+                posterior_std = posterior_std_test
+                all_enn_samples = enn_samples_test
+            else:
+                num = num_val
+                posterior_mean = posterior_mean_val
+                posterior_std = posterior_std_val
+                posterior_std = posterior_std_val
+                all_enn_samples = enn_samples_val
+
+            # Compute the mean and std of ENN posterior
+            current_enn_samples = torch.stack([all_enn_samples[selected_sample_sets[i]] for i in range(len(selected_sample_sets))])
+            enn_mean = torch.mean(current_enn_samples, dim=1)
+
+            if len(selected_sample_sets[0]) == 1:
+                enn_std = torch.ones_like(enn_mean) + self.std_ridge
+            else:
+                enn_std = torch.std(current_enn_samples, dim=1) + self.std_ridge
+
+            kl_estimates = _kl_gaussian(posterior_mean, posterior_std, enn_mean, enn_std)
+            kl_estimates = torch.mean(kl_estimates, dim=1)
+
+            errors_mean = torch.mean(torch.abs((posterior_mean - enn_mean) / posterior_mean), dim=1)
+            errors_std = torch.mean(torch.abs((posterior_std - enn_std) / posterior_std), dim=1)
+
+
+            return kl_estimates, errors_mean, errors_std
+
+        def evaluate_single_set(selected_samples, is_test):
+
+            if is_test:
+                num = num_test
+                posterior_mean = posterior_mean_test
+                posterior_std = posterior_std_test
+                posterior_std = posterior_std_test
+                all_enn_samples = enn_samples_test
+            else:
+                num = num_val
+                posterior_mean = posterior_mean_val
+                posterior_std = posterior_std_val
+                posterior_std = posterior_std_val
+                all_enn_samples = enn_samples_val
+
+            # Compute the mean and std of ENN posterior
+            current_enn_samples = all_enn_samples[selected_samples]
+            enn_mean = torch.mean(current_enn_samples, dim=0)
+
+            if len(selected_samples) == 1:
+                enn_std = torch.ones_like(enn_mean) + self.std_ridge
+            else:
+                enn_std = torch.std(current_enn_samples, dim=0) + self.std_ridge
+
+            kl_estimates = _kl_gaussian(posterior_mean, posterior_std, enn_mean, enn_std)
+            kl_estimate = torch.mean(kl_estimates).item()
+
+            error_mean = torch.mean(torch.abs((posterior_mean - enn_mean) / posterior_mean)).item()
+            error_std = torch.mean(torch.abs((posterior_std - enn_std) / posterior_std)).item()
+
+            result = ENNQuality(
+                kl_estimate,
+                {
+                    "mean_error": error_mean,
+                    "std_error": error_std,
+                },
+            )
+
+            return result
+
+        def add_sample_to_best_single(best_samples):
+
+            best_kl = None
+            best_addition = None
+
+            for i in range(0, len(all_samples)):
+                if i not in best_samples:
+                    kl = evaluate_single_set(
+                        [*best_samples, i], False
+                    )
+                    if (best_kl is None) or (best_kl.kl_estimate > kl.kl_estimate):
+                        print(
+                            len(best_samples) + 1,
+                            "bkl kl",
+                            best_kl.kl_estimate if best_kl is not None else None,
+                            kl.kl_estimate,
+                            "i",
+                            i,
+                            "/",
+                            len(all_samples),
+                            end="\r",
+                        )
+                        best_kl = kl
+                        best_addition = i
+
+            return [*best_samples, best_addition], best_kl
+
+        def add_sample_to_best(best_samples):
+
+            best_kl = None
+            best_addition = None
+
+            all_sample_sets = []
+
+            for i in range(0, len(all_samples)):
+                if i not in best_samples:
+                    all_sample_sets.append([*best_samples, i])
+            
+            kl_results, errors_mean, errors_std = evaluate_multiple_sets(all_sample_sets, False)
+            best_samples_id = torch.argmin(kl_results)
+            best_set = all_sample_sets[best_samples_id]
+            best_kl = ENNQuality(
+                kl_results[best_samples_id].item(),
+                {
+                    "mean_error": errors_mean[best_samples_id].item(),
+                    "std_error": errors_std[best_samples_id].item(),
+                },
+            )
+
+            return best_set, best_kl
+
+        def greedy_search():
+
+            best_samples = []
+
+            for num_samples in range(1, len(all_samples)):
+                best_samples, best_val_kl = add_sample_to_best(best_samples)
+                best_kl = evaluate_single_set([*best_samples], True)
+                print("--", len(best_samples), "kl", best_kl.kl_estimate)
+
+                if num_samples > 1:
+
+                    results[num_samples] = {
+                        "best_samples": best_samples,
+                        "best_kl": best_kl,
+                        "best_val_kl": best_val_kl,
+                    }
+            
+            return results
+    
+        if greedy:
+            results = greedy_search()
+        else:
+            raise NotImplementedError("Only greedy search is implemented.")
+
+        return results
+
+
+
+    # def evaluate_quality_batched(
+    #     self, batched_sampler: EpistemicSampler, num_samples=None, device: str = "cuda:0"
+    # ) -> ENNQuality:
+    #     """Computes KL estimate on mean functions for tau=1 only."""
+    #     num_samples = self.num_enn_samples if num_samples is None else num_samples
+
+    #     x_test = self.data_sampler.x_test
+    #     num_test = x_test.shape[0]
+    #     posterior_mean = self.data_sampler.test_mean[:, 0]
+    #     posterior_std = torch.sqrt(torch.diag(self.data_sampler.test_cov))
+    #     posterior_std += self.std_ridge
+
+    #     enn_samples = batched_sampler(x_test, num_samples)[:, :, 0]
+    #     assert enn_samples.shape == (num_samples, num_test)
+    #     enn_mean = torch.mean(enn_samples, dim=0)
+    #     enn_std = torch.std(enn_samples, dim=0) + self.std_ridge
+
+    #     kl_estimates = torch.stack(
+    #         [
+    #             _kl_gaussian(
+    #                 posterior_mean[i], posterior_std[i], enn_mean[i], enn_std[i]
+    #             )
+    #             for i in range(num_test)
+    #         ]
+    #     )
+    #     kl_estimate = torch.mean(kl_estimates)
+
+    #     error_mean = torch.mean(torch.abs((posterior_mean - enn_mean) / posterior_mean))
+    #     error_std = torch.mean(torch.abs((posterior_std - enn_std) / posterior_std))
+
+    #     result = ENNQuality(
+    #         kl_estimate.item(),
+    #         {"mean_error": error_mean.item(), "std_error": error_std.item()},
+    #     )
+
+    #     return result
 
     def save(self, path: str):
 
@@ -355,6 +538,14 @@ class TestbedGPRegression(TestbedProblem):
 
 
 def _kl_gaussian(
+    mean_1: float, std_1: float, mean_2: float, std_2: float
+) -> torch.Tensor:
+    """Computes the KL(P_1 || P_2) for P_1,P_2 univariate Gaussian."""
+    log_term = torch.log(std_2 / std_1)
+    frac_term = (std_1**2 + (mean_1 - mean_2) ** 2) / (2 * std_2**2)
+    return log_term + frac_term - 0.5
+
+def batched_kl_gaussian(
     mean_1: float, std_1: float, mean_2: float, std_2: float
 ) -> torch.Tensor:
     """Computes the KL(P_1 || P_2) for P_1,P_2 univariate Gaussian."""

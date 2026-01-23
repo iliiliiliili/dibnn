@@ -294,6 +294,44 @@ def compare_jax_and_torch_ensemble_weights(jax_params, jax_prior_params, torch_m
     print(f"Total difference norm across all layers: {total_difference}")
     print()
 
+def compare_jax_and_torch_hypermodels_weights(jax_params, jax_prior_params, torch_model, device, use_double_precision):
+
+    jax_to_torch_weights = [torch.tensor(np.array(b["w"])).permute(1,0).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_params.items()]
+    jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_params.items()]
+
+    # prior_jax_to_torch_weights = [torch.tensor(np.array(b["w"])).permute(1,0).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
+    # prior_jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
+
+    total_difference = 0.0
+
+    for i in range(len(torch_model.model.weight_hyper_layers)):
+
+        tww = torch_model.model.weight_hyper_layers[i].weight.data
+        jww = jax_to_torch_weights[i * 2 + 1]
+
+        twb = torch_model.model.weight_hyper_layers[i].bias.data
+        jwb = jax_to_torch_biases[i * 2 + 1]
+
+        tbw = torch_model.model.bias_hyper_layers[i].weight.data
+        jbw = jax_to_torch_weights[i * 2]
+
+        tbb = torch_model.model.bias_hyper_layers[i].bias.data
+        jbb = jax_to_torch_biases[i * 2]
+
+        dww = tww - jww
+        dwb = twb - jwb
+
+        dbw = tbw - jbw
+        dbb = tbb - jbb
+
+        total_difference += torch.norm(dww).item() + torch.norm(dwb).item() +  torch.norm(dbw).item() + torch.norm(dbb).item()
+
+        print(f"Layer {i} weight weight difference norm: {torch.norm(dww).item()}, weight bias difference norm: {torch.norm(dwb).item()}")
+        print(f"Layer {i} bias weight difference norm: {torch.norm(dbw).item()}, bias bias difference norm: {torch.norm(dbb).item()}")
+    
+    print(f"Total difference norm across all layers: {total_difference}")
+    print()
+
 
 def write_jax_to_torch_dropout(jax_params, torch_model, device, use_double_precision):
 
@@ -440,6 +478,8 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
 
         # write_jax_to_torch_dropout(jax_state.params, torch_model, device, self.use_double_precision)
         # compare_jax_and_torch_dropout_weights(jax_state.params, torch_model, device, self.use_double_precision)
+
+        compare_jax_and_torch_hypermodels_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
 
         # external_jax_experiment.state = jax_state
         # external_jax_experiment._loss = jax_partial_loss_fn

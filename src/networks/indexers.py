@@ -20,7 +20,7 @@
 """Epistemic indexers for ENNs - PyTorch version."""
 import dataclasses
 from typing import List, Sequence
-from src import base
+from src import base, utils
 import torch
 import numpy as np
 from src.experiments.seeds import split_seed
@@ -167,6 +167,18 @@ class ScaledGaussianIndexer(base.EpistemicIndexer):
                 torch.randn(self.index_dims, generator=key, device=device) * self.scale
             )
 
+    def batched(self, key: base.RngKey, num_samples: int, device: str, correlated_index: bool = False) -> base.Index:
+
+        if isinstance(key, int):
+            torch.manual_seed(key)
+            generator = None
+        else:
+            generator = key
+
+        return (
+            torch.randn([num_samples, *self.index_dims], generator=generator, device=device) * self.scale
+        )
+
 
 @dataclasses.dataclass
 class SetScaledGaussianIndexer(base.EpistemicIndexer):
@@ -191,6 +203,30 @@ class SetScaledGaussianIndexer(base.EpistemicIndexer):
 
         return result
 
+
+class BBBIndexer(base.EpistemicIndexer):
+    """Index into a Bayesian by Gaussian samples."""
+
+    def __init__(self, indexer: SetScaledGaussianIndexer, output_sizes: Sequence[int]):
+        super().__init__()
+        self.indexer = indexer
+        self.output_sizes = output_sizes
+
+    def __call__(self, key: base.RngKey, device: str) -> base.Index:
+        index = self.indexer(key, device)
+
+        weight_index = index[: len(self.output_sizes) - 1]
+        bias_index = index[len(self.output_sizes) - 1 :]
+
+        total_index = [*zip(weight_index, bias_index)]
+        return total_index
+
+    def batched(
+        self, key: base.RngKey, num_index_samples: int, device: str, correlated_index: bool = False
+    ) -> base.Index:
+        batched_indexer = utils.make_batch_indexer(self, num_index_samples)
+        result = batched_indexer(key, device)
+        return result
 
 @dataclasses.dataclass
 class GaussianWithUnitIndexer(base.EpistemicIndexer):

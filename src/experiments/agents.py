@@ -85,12 +85,32 @@ def extract_enn_sampler(
     return enn_sampler
 
 
+def extract_fixed_enn_sampler(
+    model: torch.nn.Module, enn: enn_base.EpistemicNetwork, device
+) -> testbed_base.EpistemicSampler:
+    """Extract an epistemic sampler from a trained ENN."""
+
+    def enn_sampler(
+        x: torch.Tensor, indices: torch.Tensor
+    ) -> torch.Tensor:
+        """Generate a random sample from posterior distribution at x."""
+        with torch.no_grad():
+
+            net_out = enn.apply(model, x, indices)
+            net_out = utils.parse_net_output(net_out)
+
+            return net_out
+
+    return enn_sampler
+
+
 @dataclasses.dataclass
 class VanillaEnnAgent(testbed_base.TestbedAgent):
     """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
 
     config: VanillaEnnConfig
     use_double_precision: bool = True
+    fixed_sampler: bool = False
 
     def __call__(
         self,
@@ -103,6 +123,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         # Create the ENN
         enn = self.config.enn_ctor(prior, use_double_precision=self.use_double_precision)
+        self.enn = enn
 
         init_seed, dataset_seed, train_seed = split_seed(seed, 3)
 
@@ -154,4 +175,18 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
             steps += max(1, batch.x.shape[0] // 100)
 
         model.eval()
-        return extract_enn_sampler(model, enn, device)
+
+        if self.fixed_sampler:
+            return extract_fixed_enn_sampler(model, enn, device)
+        else:
+            return extract_enn_sampler(model, enn, device)
+    
+    def create_all_indices(
+        self,
+        max_samples: int,
+        seed: int,
+        device: str = "cuda:0",
+    ) -> torch.Tensor:
+        """Create all indices for fixed sampler."""
+        indices = self.enn.indexer.batched(seed, max_samples, device)
+        return indices

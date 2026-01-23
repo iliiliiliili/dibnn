@@ -109,14 +109,14 @@ class RegressionTestbedConfig:
 def regression_load_from_config(
     config: RegressionTestbedConfig,
     use_double_precision: bool = True,
-) -> testbed_base.TestbedProblem:
+) -> testbed.TestbedGPRegression:
     """Loads regression problem from config.
 
     Args:
         config: Configuration for the regression testbed
 
     Returns:
-        TestbedProblem instance
+        TestbedGPRegression instance
     """
     x_train, x_test, x_val = gaussian_data(
         seed=config.seed,
@@ -154,7 +154,7 @@ def regression_load(
     noise_std: float,
     dataset_folder: str = "datasets",
     use_double_precision: bool = True,
-) -> testbed_base.TestbedProblem:
+) -> testbed.TestbedGPRegression:
     """Load GP regression from sweep hyperparameters.
 
     Args:
@@ -164,7 +164,7 @@ def regression_load(
         noise_std: Standard deviation of observation noise
 
     Returns:
-        TestbedProblem instance
+        TestbedGPRegression instance
     """
     num_train = int(data_ratio * input_dim)
     config = RegressionTestbedConfig(num_train, input_dim, seed, noise_std)

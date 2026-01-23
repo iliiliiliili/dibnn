@@ -432,6 +432,8 @@ class MLPHypermodelPriorIndependentLayers(base.EpistemicNetwork):
             enn_wo_prior, prior_fn, prior_scale=prior_scale
         )
 
+        self.prior_params = prior_params
+
         super().__init__(enn.apply, enn.init, enn.indexer)
 
 

@@ -57,7 +57,7 @@ def make_noise_fn(
         return _make_layer_ensemble_gaussian_noise(noise_std, seed)
 
     elif isinstance(indexer, ScaledGaussianIndexer):
-        return _make_gaussian_index_noise(indexer.index_dim, noise_std, seed)
+        return _make_gaussian_index_noise(indexer.index_dims[0], noise_std, seed)
 
     elif isinstance(indexer, GaussianWithUnitIndexer):
         index_dim = indexer.index_dim
@@ -131,18 +131,25 @@ def _make_layer_ensemble_gaussian_noise(
 def _make_gaussian_index_noise(index_dim: int, noise_std: float, seed: int) -> NoiseFn:
     """Factory method to add Gaussian noise for index MLP."""
 
-    def noise_fn(data_index: base.DataIndex, index: base.Index) -> base.Tensor:
+    def noise_fn(data_index: base.DataIndex, index: base.Index, device: str) -> torch.Tensor:
         """Assumes scaled Gaussian index with reserved first component."""
-        raise Exception("Not implemented for PyTorch.")
         batch_size = data_index.shape[0]
         
-        generator = torch.Generator()
-        generator.manual_seed(seed)
+        generator = torch.Generator(device=device)
         
-        b = torch.randn(batch_size, index_dim, generator=generator)
-        z = index.unsqueeze(0).repeat(batch_size, 1)
+        def indexed_randn(index: int, device: str):
+            """Generates indexed random normal samples."""
+            generator.manual_seed(index)
+            sample = torch.randn(index_dim, generator=generator, device=device)
+            return sample
         
-        noise = torch.sum(b * z, dim=1, keepdim=True) * noise_std
+        data_index += seed
+
+        b = torch.stack([indexed_randn(idx.item(), device) for idx in data_index.reshape(-1)]).reshape([batch_size, index_dim]).unsqueeze(1)
+        
+        z = index.unsqueeze(0).repeat(batch_size, 1, 1)
+        
+        noise = torch.sum(b * z, dim=-1) * noise_std
         return noise
 
     return noise_fn

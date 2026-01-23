@@ -25,6 +25,7 @@ import torch
 import torch.nn as nn
 
 
+
 class MlpBbbEnn(base.EpistemicNetwork):
 
     def __init__(
@@ -135,14 +136,16 @@ class MlpBbbEnn(base.EpistemicNetwork):
             scale=sigma_0,
         )
 
-        def indexer_fn(key, device) -> base.EpistemicIndexer:
-            index = indexer(key, device)
+        indexer_fn = indexers.BBBIndexer(indexer, output_sizes)
 
-            weight_index = index[: len(output_sizes) - 1]
-            bias_index = index[len(output_sizes) - 1 :]
+        # def indexer_fn(key, device) -> base.EpistemicIndexer:
+        #     index = indexer(key, device)
 
-            total_index = [*zip(weight_index, bias_index)]
-            return total_index
+        #     weight_index = index[: len(output_sizes) - 1]
+        #     bias_index = index[len(output_sizes) - 1 :]
+
+        #     total_index = [*zip(weight_index, bias_index)]
+        #     return total_index
 
         def apply_fn(
             model: nn.Module, inputs: torch.Tensor, index: base.Index
