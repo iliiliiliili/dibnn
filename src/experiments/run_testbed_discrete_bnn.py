@@ -160,7 +160,7 @@ def main(
                                 + str(ns)
                                 + "mns"
                                 + str(max_samples)
-                                + ".txt",
+                                + "_kl.txt",
                                 "a",
                             ) as f:
 
