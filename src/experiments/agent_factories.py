@@ -826,7 +826,7 @@ def make_layer_ensembles_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
 
                         settings = {
                             "agent": "layer_ensembles",
-                            "num_ensembles": num_ensembles,
+                            "num_ensembles": num_ensemble,
                             "inference_samples": str(inference_samples),
                             "noise_scale": noise_scale,
                             "prior_scale": prior_scale,
@@ -868,7 +868,7 @@ def make_layer_ensembles_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]
 
                         settings = {
                             "agent": "layer_ensembles",
-                            "num_ensembles": num_ensembles,
+                            "num_ensembles": num_ensemble,
                             "inference_samples": str(inference_samples),
                             "noise_scale": noise_scale,
                             "prior_scale": prior_scale,
