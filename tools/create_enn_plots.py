@@ -48,6 +48,10 @@ with open(tex_template_file, "r") as f:
 float_fields = [
     "val_kl",
     "val_ll",
+    "val_kl_mean",
+    "val_ll_mean",
+    "val_kl_variance",
+    "val_ll_variance",
     "noise_scale",
     "prior_scale",
     "dropout_rate",
@@ -83,6 +87,10 @@ field_tex_names = {
     "kl_std": "Var[KL]",
     "std": "Var[KL]",
     "val_std": "Var[val KL]",
+    "low_mstd": "Mean[KL]-Var[KL]",
+    "high_mstd": "Mean[KL]+Var[KL]",
+    "low_vmstd": "Mean[val KL]-Var[val KL]",
+    "high_vmstd": "Mean[val KL]+Var[val KL]",
     "noise_scale": "NS",
     "prior_scale": "PS",
     "dropout_rate": "DR",
@@ -114,8 +122,8 @@ agent_plot_params = {
     "ensemble": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -123,8 +131,8 @@ agent_plot_params = {
     "subsample_ensemble": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -132,8 +140,8 @@ agent_plot_params = {
     "dropout": {
         "x": "dropout_rate",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["regularization_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -141,8 +149,8 @@ agent_plot_params = {
     "hypermodel": {
         "x": "index_dim",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -150,8 +158,8 @@ agent_plot_params = {
     "bbb": {
         "x": "sigma_0",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["learning_rate"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -159,8 +167,8 @@ agent_plot_params = {
     "vnn": {
         "x": "num_batches",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["activation_mode", "global_std_mode"],
         # "facet": ["activation_mode", "global_std_mode", "num_index_samples"],
         "colour": "factor(num_layers)",
@@ -170,8 +178,8 @@ agent_plot_params = {
     "vnn_lrelu": {
         "x": "num_batches",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["activation_mode", "global_std_mode"],
         # "facet": ["activation_mode", "global_std_mode", "num_index_samples"],
         "colour": "factor(num_layers)",
@@ -181,8 +189,8 @@ agent_plot_params = {
     "vnn_init": {
         "x": "num_batches",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["activation_mode", "global_std_mode", "loss_function"],
         "colour": "activation",
         "shape": "factor(hidden_size)",
@@ -191,8 +199,8 @@ agent_plot_params = {
     "layer_ensemble": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -200,8 +208,8 @@ agent_plot_params = {
     "layer_ensemble_cor": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -209,8 +217,8 @@ agent_plot_params = {
     "layer_ensemble_einsum_cor": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -218,8 +226,8 @@ agent_plot_params = {
     "true_layer_ensemble_einsum": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "prior_scale"],
         "colour": "factor(num_layers)",
         "shape": "factor(hidden_size)",
@@ -227,8 +235,8 @@ agent_plot_params = {
     "true_layer_ensemble_einsum_cor": {
         "x": "num_ensemble",
         "y": "kl",
-        "val_y": "val_kl",
-        "val_ll_y": "val_ll",
+        "val_y": "val_kl_mean",
+        "val_ll_y": "val_ll_mean",
         "facet": ["noise_scale", "sample_type"],
         "colour": "factor(num_layers)",
         "shape": "factor(prior_scale)",
@@ -579,6 +587,39 @@ def make_hypermodel_ranked_params(num_samples, use_ranked):
                 }
 
                 summary_select_agent_params["hypermodel"].append(params)
+
+
+def make_ensemble_ranked_params(num_samples, use_ranked):
+
+    if use_ranked:
+
+        summary_select_agent_params["ensemble"] = []
+        all_nens_samples = [
+            (num_samples, [*range(2, num_samples)]),
+        ]
+
+        for max_num_samples, inference_samples in all_nens_samples:
+            for samples in inference_samples:
+
+                indexer = samples
+
+                params = {
+                    "agent_suffix": "_"
+                    + str(max_num_samples)
+                    + "s"
+                    + str(indexer)
+                    + ("f" if samples == "full" else ""),
+                    "noise_scale": [1.0],
+                    "prior_scale": [1.0],
+                    "num_layers": [2],
+                    "hidden_size": [50],
+                    "num_ensemble": [10, 30],
+                    "training_steps": [1000],
+                    "max_num_samples": [max_num_samples],
+                    "indexer": [indexer],
+                }
+
+                summary_select_agent_params["ensemble"].append(params)
 
 
 def add_subsample_ensemble_summary_params():
@@ -1001,7 +1042,7 @@ def plot_summary(
     for agent, all_frames in all_agent_frames.items():
 
         if agent not in summary_select_agent_params:
-            print(f"Skippng agent {agent} due to summary_select_agent_params filter")
+            print(f"Skipping agent {agent} due to summary_select_agent_params filter")
             continue
 
         params = agent_plot_params[agent]
@@ -1129,7 +1170,7 @@ def plot_ensemble_summary(
     for agent, all_frames in all_agent_frames.items():
 
         if agent not in summary_select_agent_params:
-            print(f"Skippng agent {agent} due to summary_select_agent_params filter")
+            print(f"Skipping agent {agent} due to summary_select_agent_params filter")
             continue
 
         params = agent_plot_params[agent]
@@ -1222,11 +1263,15 @@ def plot_ranked_ensemble_summary(
     allowed_input_dims,
     parse_experiment_parameters=parse_enn_experiment_parameters,
     allowed_max_num_samples=None,
+    allowed_data_ratios=None,
     agent_name=None,
     is_log_likelihood=False,
+    y_limit=(0.1, 100),
 ):
 
     all_agent_frames = {}
+    all_experiment_params = {}
+    all_experiment_files = {}
 
     max_num_samples = None
 
@@ -1236,6 +1281,10 @@ def plot_ranked_ensemble_summary(
 
         if experiment_params["input_dim"] not in allowed_input_dims:
             print("Skipping file", file, "due to input dim filter")
+            continue
+
+        if (allowed_data_ratios is not None) and (experiment_params["data_ratio"] not in allowed_data_ratios):
+            print("Skipping file", file, "due to data ratio filter")
             continue
 
         if (allowed_max_num_samples is not None) and (
@@ -1258,14 +1307,22 @@ def plot_ranked_ensemble_summary(
 
             if agent not in all_agent_frames:
                 all_agent_frames[agent] = []
+                all_experiment_params[agent] = []
+                all_experiment_files[agent] = []
 
             all_agent_frames[agent].append(frame)
+            all_experiment_params[agent].append(experiment_params)
+            all_experiment_files[agent].append(file)
 
     data = {
         "agent_full": [],
         "agent": [],
         "mean": [],
         "std": [],
+        "low_mstd": [],
+        "high_mstd": [],
+        "low_vmstd": [],
+        "high_vmstd": [],
         "val_mean": [],
         "val_std": [],
         "num_ensemble": [],
@@ -1275,7 +1332,7 @@ def plot_ranked_ensemble_summary(
     for agent, all_frames in all_agent_frames.items():
 
         if agent not in summary_select_agent_params:
-            print(f"Skippng agent {agent} due to summary_select_agent_params filter")
+            print(f"Skipping agent {agent} due to summary_select_agent_params filter")
             continue
 
         params = agent_plot_params[agent]
@@ -1324,12 +1381,21 @@ def plot_ranked_ensemble_summary(
             if is_log_likelihood:
                 val_mean = -val_mean
 
+            mean = min(y_limit[1], max(y_limit[0], mean))
+            val_mean = min(y_limit[1], max(y_limit[0], val_mean))
+            std = min(limit_std, std)
+            val_std = min(limit_std, val_std)
+
             data["agent_full"].append((agent + agent_suffix).replace("_", "\n"))
             data["agent"].append(agent)
             data["mean"].append(mean)
-            data["std"].append(min(limit_std, std))
+            data["std"].append(std)
+            data["low_mstd"].append(max(y_limit[0], mean-std))
+            data["high_mstd"].append(min(y_limit[1], mean+std))
             data["val_mean"].append(val_mean)
-            data["val_std"].append(min(limit_std, val_std))
+            data["val_std"].append(val_std)
+            data["low_vmstd"].append(max(y_limit[0], val_mean-val_std))
+            data["high_vmstd"].append(min(y_limit[1], val_mean+val_std))
             data["num_ensemble"].append(
                 max_num_samples
                 if max_num_samples is not None
@@ -1353,19 +1419,19 @@ def plot_ranked_ensemble_summary(
                 + " samples"
             ),
         )
-        + scale_y_continuous(trans="log10")
+        + scale_y_continuous(trans="log10", limits=y_limit)
         + scale_x_continuous(trans="log10")
         + geom_point(aes(colour="agent"), size=3, stroke=0.1)
         + geom_errorbar(
-            aes(colour="'#FFFF00'", ymin="mean-std", ymax="mean+std"),
-            width=0.07,
-            size=0.9,
+            aes(colour="'#FFBB00'", ymin="low_mstd", ymax="high_mstd"),
+            width=0.04,
+            size=0.6,
         )
         + geom_point(aes(x="indexer", y="val_mean", colour="'green'"), size=2, stroke=0.1, shape="^")
         + geom_errorbar(
-            aes(colour="'#999900'", ymin="val_mean-val_std", ymax="val_mean+val_std"),
+            aes(colour="'#999900'", ymin="low_vmstd", ymax="high_vmstd"),
             width=0.02,
-            size=0.4,
+            size=0.2,
         )
         + theme(
             axis_title=element_text(size=15),
@@ -1374,7 +1440,7 @@ def plot_ranked_ensemble_summary(
         )
         + scale_color_discrete(guide=False)
         # + scale_x_discrete(guide=guide_legend())
-        + ylab("Mean KL / Val " + ("NLL" if is_log_likelihood else "KL"))
+        + ylab("Mean Test KL / Val " + ("NLL" if is_log_likelihood else "KL"))
         + xlab("Number of samples")
     )
 
@@ -1385,6 +1451,11 @@ def plot_ranked_ensemble_summary(
             ""
             if allowed_max_num_samples is None
             else "_mns" + "_".join([str(a) for a in allowed_max_num_samples])
+        )
+        + (
+            ""
+            if allowed_data_ratios is None
+            else "_dr" + "_".join([str(a) for a in allowed_data_ratios])
         )
     )
 
@@ -1497,85 +1568,127 @@ def create_combined_summary_plots(
         plot_summary(files, ids)
 
 
-def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]], results_folder="results", file_filter="results_*vnn*", is_log_likelihood=False):
+def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None):
 
     global summary_select_agent_params
     summary_select_agent_params = {}
-    files = glob(results_folder + "/" + file_filter)
+    files = glob(results_folder + "/" + file_filter + ("_ll.txt" if is_log_likelihood else "_kl.txt"))
     make_vnn_ranked_params(num_samples, use_ranked=True)
 
     for ids in summary_input_dims:
         plot_ranked_ensemble_summary(
-            files, ids, allowed_max_num_samples=[num_samples], agent_name="VNN", is_log_likelihood=is_log_likelihood
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="VNN", is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios
         )
 
 
-def create_ranked_bbb_plots(num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_all_bnn*", is_log_likelihood=False):
+def create_ranked_bbb_plots(num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None):
 
     global summary_select_agent_params
     summary_select_agent_params = {}
 
-    files = glob(results_folder + "/" + file_filter)
+    files = glob(results_folder + "/" + file_filter + ("_ll.txt" if is_log_likelihood else "_kl.txt"))
     make_bbb_ranked_params(num_samples, use_ranked=True)
 
     for ids in summary_input_dims:
         plot_ranked_ensemble_summary(
-            files, ids, allowed_max_num_samples=[num_samples], agent_name="BBB", is_log_likelihood=is_log_likelihood
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="BBB", is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios
         )
 
 
 def create_ranked_dropout_plots(
-    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_all_bnn*", is_log_likelihood=False
+    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
 ):
 
     global summary_select_agent_params
     summary_select_agent_params = {}
 
-    files = glob(results_folder + "/" + file_filter)
+    files = glob(results_folder + "/" + file_filter + ("_ll.txt" if is_log_likelihood else "_kl.txt"))
     make_dropout_ranked_params(num_samples, use_ranked=True)
 
     for ids in summary_input_dims:
         plot_ranked_ensemble_summary(
-            files, ids, allowed_max_num_samples=[num_samples], agent_name="Dropout", is_log_likelihood=is_log_likelihood
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="Dropout", is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios
         )
 
 
 def create_ranked_hypermodel_plots(
-    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_all_bnn*", is_log_likelihood=False
+    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
 ):
 
     global summary_select_agent_params
     summary_select_agent_params = {}
 
-    files = glob(results_folder + "/" + file_filter)
+    files = glob(results_folder + "/" + file_filter + ("_ll.txt" if is_log_likelihood else "_kl.txt"))
     make_hypermodel_ranked_params(num_samples, use_ranked=True)
 
     for ids in summary_input_dims:
         plot_ranked_ensemble_summary(
-            files, ids, allowed_max_num_samples=[num_samples], agent_name="Hypermodels", is_log_likelihood=is_log_likelihood
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="Hypermodels", is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios
+        )
+
+def create_ranked_ensemble_plots(
+    num_samples=30, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
+):
+
+    global summary_select_agent_params
+    summary_select_agent_params = {}
+
+    files = glob(results_folder + "/" + file_filter + ("_ll.txt" if is_log_likelihood else "_kl.txt"))
+    make_ensemble_ranked_params(num_samples, use_ranked=True)
+
+    for ids in summary_input_dims:
+        plot_ranked_ensemble_summary(
+            files, ids, allowed_max_num_samples=[num_samples], agent_name="Ensembles", is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios
         )
 
 
-def create_ranked_dbnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]], results_folder="results", file_filter=None, is_log_likelihood=False):
+def create_ranked_dbnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]], agents = "all", results_folder="results", file_filter=None, is_log_likelihood=False, allowed_data_ratios=None):
 
     extra_params = {}
 
     if file_filter is not None:
         extra_params["file_filter"] = file_filter
 
-    create_ranked_vnn_plots(
-        num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, **extra_params
-    )
-    create_ranked_bbb_plots(
-        num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, **extra_params
-    )
-    create_ranked_dropout_plots(
-        num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, **extra_params
-    )
-    create_ranked_hypermodel_plots(
-        num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, **extra_params
-    )
+    if agents == "all" or "vnn" in agents:
+        create_ranked_vnn_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
 
+    if agents == "all" or "bbb" in agents:
+        create_ranked_bbb_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
+
+    if agents == "all" or "dropout" in agents:
+        create_ranked_dropout_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
+
+    if agents == "all" or "hypermodel" in agents:
+        create_ranked_hypermodel_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
+
+    if agents == "all" or "ensemble" in agents:
+        create_ranked_ensemble_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, results_folder=results_folder, is_log_likelihood=is_log_likelihood, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
+
+def create_all_ranked_dbnn_plots(max_num_samples=(10, 100, 1000), summary_input_dims=[[10, 100, 1000]], agents="all", results_folder="results", file_filter=None, allowed_data_ratios=None):
+
+    extra_params = {}
+
+    if file_filter is not None:
+        extra_params["file_filter"] = file_filter
+
+    for num_samples in max_num_samples:
+        create_ranked_dbnn_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, agents=agents, results_folder=results_folder, is_log_likelihood=False, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
+
+        create_ranked_dbnn_plots(
+            num_samples=num_samples, summary_input_dims=summary_input_dims, agents=agents, results_folder=results_folder, is_log_likelihood=True, allowed_data_ratios=allowed_data_ratios, **extra_params
+        )
 
 if __name__ == "__main__":
     Fire()

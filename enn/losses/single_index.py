@@ -66,23 +66,23 @@ def average_single_index_loss(
         key: base.RngKey,
     ) -> base.Array:
         batched_indexer = utils.make_batch_indexer(enn.indexer, num_index_samples)
-        batched_loss = jax.vmap(single_loss, in_axes=[None, None, None, 0])
         batched_index = batched_indexer(key)
         if export_index is not None:
             export_index(batched_index)
 
-        # def batched_loss(apply, params, batch, batched_index):
-        #     loss_list = []
-        #     metrics_list = []
-        #     for i in range(batched_index.shape[0]):
-        #         loss_i, metrics_i = single_loss(apply, params, batch, batched_index[i])
-        #         loss_list.append(loss_i)
-        #         metrics_list.append(metrics_i)
-        #     total_loss = jnp.stack(loss_list)
-        #     total_metrics = {}
-        #     for key in metrics_list[0].keys():
-        #         total_metrics[key] = jnp.stack([m[key] for m in metrics_list])
-        #     return total_loss, total_metrics
+        # batched_loss = jax.vmap(single_loss, in_axes=[None, None, None, 0])
+        def batched_loss(apply, params, batch, batched_index):
+            loss_list = []
+            metrics_list = []
+            for i in range(batched_index.shape[0]):
+                loss_i, metrics_i = single_loss(apply, params, batch, batched_index[i])
+                loss_list.append(loss_i)
+                metrics_list.append(metrics_i)
+            total_loss = jnp.stack(loss_list)
+            total_metrics = {}
+            for key in metrics_list[0].keys():
+                total_metrics[key] = jnp.stack([m[key] for m in metrics_list])
+            return total_loss, total_metrics
 
         loss, metrics = batched_loss(enn.apply, params, batch, batched_index)
         return jnp.mean(loss), jax.tree_map(jnp.mean, metrics)

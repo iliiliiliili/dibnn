@@ -47,8 +47,6 @@ class MlpLinearHypermodelEnn(base.EpistemicNetwork):
             def __init__(self, output_sizes, index_dim, w_init, b_init, use_double_precision):
                 super().__init__()
 
-                self.functional_linear = BatchedFunctionalLinear()
-
                 self.weight_hyper_layers = nn.ModuleList()
                 self.bias_hyper_layers = nn.ModuleList()
 
@@ -89,30 +87,31 @@ class MlpLinearHypermodelEnn(base.EpistemicNetwork):
                     )
                 ):
 
+                    # weight = weight_hyper_layer(indices).reshape(
+                    #     -1, output_sizes[i+1], output_sizes[i]
+                    # )
+                    # bias = bias_hyper_layer(indices).reshape(
+                    #     -1, output_sizes[i+1]
+                    # )
+
                     weight = weight_hyper_layer(indices).reshape(
-                        -1, output_sizes[i+1], output_sizes[i]
+                        indices.shape[0], output_sizes[i], output_sizes[i+1]
                     )
                     bias = bias_hyper_layer(indices).reshape(
-                        -1, output_sizes[i+1]
+                        indices.shape[0], output_sizes[i+1]
                     )
 
                     if scale_down_weights:
                         weight = weight / math.sqrt(weight.shape[-1])
 
-                    x = self.functional_linear(x, weight, bias)
-
+                    out = x @ weight + bias.unsqueeze(1)
+                    
                     if i < len(self.weight_hyper_layers) - 1:
-                        x = torch.relu(x)
+                        out = torch.relu(out)
+                    
+                    x = out
 
                 return x
-
-            def get_params_tuple(self):
-                return (
-                    self.weight_sigmas,
-                    self.bias_sigmas,
-                    self.weight_mus,
-                    self.bias_mus,
-                )
 
         indexer = indexers.ScaledGaussianIndexer(
             index_dims=[index_dim],
@@ -134,7 +133,7 @@ class MlpLinearHypermodelEnn(base.EpistemicNetwork):
         super().__init__(apply_fn, init_fn, indexer)
 
 
-class MlpLinearHypermodelEnnWithAdditivePrior(base.EpistemicNetwork):
+class MlpLinearHypermodelEnnWithAdditivePriorIndependentLayers(base.EpistemicNetwork):
 
     def __init__(
         self,
@@ -151,10 +150,6 @@ class MlpLinearHypermodelEnnWithAdditivePrior(base.EpistemicNetwork):
             output_sizes, index_dim, w_init, b_init, scale_down_weights, use_double_precision
         )
 
-        prior_enn = MlpLinearHypermodelEnn(
-            output_sizes, index_dim, w_init, b_init, scale_down_weights, use_double_precision
-        )
-
         def apply_fn(
             model: ModelWithPrior, inputs: torch.Tensor, index: base.Index
         ) -> base.Output:
@@ -164,8 +159,12 @@ class MlpLinearHypermodelEnnWithAdditivePrior(base.EpistemicNetwork):
         def init_fn(seed: int) -> nn.Module:
 
             seed_train, seed_prior = utils.split_seed(seed, 2)
+            
             model = enn.init(seed_train)
-            prior_model = prior_enn.init(seed_prior)
+            torch.manual_seed(seed_prior)
+            prior_model = PriorMLPIndependentLayers(
+                output_sizes, index_dim
+            )
 
             result = ModelWithPrior(model, prior_model, prior_scale)
 
@@ -196,24 +195,22 @@ class PriorHyperLinear(nn.Module):
         
         self.w = torch.nn.Parameter(torch.randn(self.output_size, hidden_size, self.index_dim_per_layer))
         self.b = torch.nn.Parameter(torch.randn(self.output_size, self.index_dim_per_layer))
+        self.functional_linear = BatchedFunctionalLinear()
 
     def forward(self, x: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
         
-        # Initialize parameters
-
         w = self.w / torch.norm(self.w, dim=-1, keepdim=True)
         b = self.b / torch.norm(self.b, dim=-1, keepdim=True)
 
-        w = w * torch.sqrt(torch.tensor(self.weight_scaling / self.hidden_size))
-        b = b * torch.sqrt(torch.tensor(self.bias_scaling)) + self.fixed_bias_val
+        w = w * torch.sqrt(torch.tensor(self.weight_scaling / self.hidden_size, device=w.device))
+        b = b * torch.sqrt(torch.tensor(self.bias_scaling, device=b.device)) + self.fixed_bias_val
 
-        weights = torch.einsum("ohi,i->oh", w, z)
-        bias = torch.einsum("oi,i->o", b, z)
+        weights = torch.einsum("ohi,si->soh", w, z)
+        bias = torch.einsum("oi,si->so", b, z)
 
-        return torch.einsum("oh,bh->bo", weights, x) + bias
+        result = self.functional_linear(x, weights, bias)
 
-
-
+        return result
 
 
 
@@ -227,11 +224,10 @@ class PriorMLPIndependentLayers(torch.nn.Module):
         weight_scaling: float = 1.0,
         bias_scaling: float = 1.0,
         fixed_bias_val: float = 0.0,
-        name: str = "prior_independent_layers",
     ):
-        super().__init__(name=name)
+        super().__init__()
         self.output_sizes = output_sizes
-        self.num_layers = len(self._output_sizes)
+        self.num_layers = len(self.output_sizes) - 1
         self.index_dim = index_dim
         self.weight_scaling = weight_scaling
         self.bias_scaling = bias_scaling
@@ -249,9 +245,9 @@ class PriorMLPIndependentLayers(torch.nn.Module):
 
         # Defining layers of the prior MLP and associating each layer with a set of
         # indices
-        self._layers = []
+        self.layers = nn.ModuleList()
         for i in range(1, len(self.output_sizes)):
-            index_dim_per_layer = len(self.layers_indices[i])
+            index_dim_per_layer = len(self.layers_indices[i - 1])
             layer = PriorHyperLinear(
                 self.output_sizes[i],
                 self.output_sizes[i - 1],
@@ -260,7 +256,7 @@ class PriorMLPIndependentLayers(torch.nn.Module):
                 self.bias_scaling,
                 self.fixed_bias_val,
             )
-            self._layers.append(layer)
+            self.layers.append(layer)
 
     def __call__(self, x: torch.Tensor, z: base.Index) -> torch.Tensor:
         if self.index_dim < self.num_layers:
@@ -268,12 +264,12 @@ class PriorMLPIndependentLayers(torch.nn.Module):
             index_layers = [z] * self.num_layers
         else:
             # Spliting index dimension into num_layers chunks
-            index_layers = torch.tensor_split(z, self.num_layers)
+            index_layers = torch.tensor_split(z, self.num_layers, dim=-1)
 
         out = x
-        for i, layer in enumerate(self._layers):
+        for i, layer in enumerate(self.layers):
             index_layer = index_layers[i]
             out = layer(out, index_layer)
             if i < self.num_layers - 1:
-                out = torch.nn.relu(out)
+                out = torch.nn.functional.relu(out)
         return out

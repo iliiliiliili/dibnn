@@ -170,7 +170,7 @@ def make_hypermodel_ctor(
         output_sizes = (
             [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
         )
-        return networks.MlpLinearHypermodelEnnWithAdditivePrior(
+        return networks.MlpLinearHypermodelEnnWithAdditivePriorIndependentLayers(
             output_sizes=output_sizes,
             index_dim=index_dim,
             prior_scale=prior_scale,
@@ -517,6 +517,7 @@ def make_ensemble_sweep() -> List[AgentCtorConfig]:
                                     "hidden_size": hidden_size,
                                     "learning_rate": learning_rate,
                                     "training_steps": training_steps,
+                                    "max_num_samples": num_ensemble,
                                 }
                                 config_ctor = make_ensemble_ctor(
                                     num_ensemble = num_ensemble,
@@ -541,7 +542,7 @@ def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
     for num_ensemble in [10, 30]:
         for noise_scale in [1]:
             for prior_scale in [1]:
-                for num_layers in [2, 3]:
+                for num_layers in [2]:
                     for hidden_size in [50]:
                         for learning_rate in [1e-3]:
                             for training_steps in [1000]:
@@ -554,6 +555,7 @@ def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
                                     "hidden_size": hidden_size,
                                     "learning_rate": learning_rate,
                                     "training_steps": training_steps,
+                                    "max_num_samples": num_ensemble,
                                 }
                                 config_ctor = make_ensemble_ctor(
                                     num_ensemble = num_ensemble,
@@ -571,7 +573,7 @@ def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
 
 
 
-def make_hypermodel_sweep() -> List[AgentCtorConfig]:
+def make_hypermodel_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
 
@@ -590,7 +592,8 @@ def make_hypermodel_sweep() -> List[AgentCtorConfig]:
                             "hidden_size": hidden_size,
                         }
                         config_ctor = make_hypermodel_ctor(
-                            index_dim, noise_scale, prior_scale, hidden_size, num_layers, num_index_samples=index_dim * 20
+                            index_dim, noise_scale, prior_scale, hidden_size, num_layers, num_index_samples=index_dim * 20,
+                            batch_size=100 if reduce_batch else None,
                         )
                         sweep.append(AgentCtorConfig(settings, config_ctor))
 
@@ -598,7 +601,7 @@ def make_hypermodel_sweep() -> List[AgentCtorConfig]:
 
 
 
-def make_hypermodel_best_sweep() -> List[AgentCtorConfig]:
+def make_hypermodel_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
 
@@ -617,7 +620,8 @@ def make_hypermodel_best_sweep() -> List[AgentCtorConfig]:
                             "hidden_size": hidden_size,
                         }
                         config_ctor = make_hypermodel_ctor(
-                            index_dim, noise_scale, prior_scale, hidden_size, num_layers, num_index_samples=index_dim * 20
+                            index_dim, noise_scale, prior_scale, hidden_size, num_layers, num_index_samples=index_dim * 20,
+                            batch_size=100 if reduce_batch else None,
                         )
                         sweep.append(AgentCtorConfig(settings, config_ctor))
 
@@ -629,9 +633,11 @@ def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCt
     if agent == "all":
         agent_sweep = make_dropout_sweep() + make_bbb_sweep() + make_ensemble_sweep() + make_hypermodel_sweep()
     if agent == "all_best":
-        agent_sweep = make_dropout_best_sweep() +make_bbb_best_sweep(reduce_batch=reduce_batch) + make_ensemble_best_sweep() + make_hypermodel_best_sweep()
+        agent_sweep = make_dropout_best_sweep() +make_bbb_best_sweep(reduce_batch=reduce_batch) + make_ensemble_best_sweep() + make_hypermodel_best_sweep(reduce_batch=reduce_batch)
     elif agent == "dropout":
         agent_sweep = make_dropout_sweep()
+    elif agent == "dropout_best":
+        agent_sweep = make_dropout_best_sweep()
     elif agent == "bbb":
         agent_sweep = make_bbb_selected_sweep(reduce_batch=reduce_batch)
     elif agent == "bbb_best":
@@ -640,8 +646,12 @@ def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCt
         agent_sweep = make_bbb_debug()
     elif agent == "ensemble":
         agent_sweep = make_ensemble_sweep()
+    elif agent == "ensemble_best":
+        agent_sweep = make_ensemble_best_sweep()
     elif agent == "hypermodel":
         agent_sweep = make_hypermodel_sweep()
+    elif agent == "hypermodel_best":
+        agent_sweep = make_hypermodel_best_sweep(reduce_batch=reduce_batch)
     else:
         raise ValueError(f"agent={agent} is not valid!")
 

@@ -23,7 +23,7 @@
 from src.networks.dropout import MLPDropoutENN
 
 from src.networks.bbb import MlpBbbEnn
-from src.networks.linear_hypermodels import MlpLinearHypermodelEnn, MlpLinearHypermodelEnnWithAdditivePrior
+from src.networks.linear_hypermodels import MlpLinearHypermodelEnn, MlpLinearHypermodelEnnWithAdditivePriorIndependentLayers
 
 # Ensemble
 from src.networks.ensembles import MlpEnsembleEnnWithAdditivePrior

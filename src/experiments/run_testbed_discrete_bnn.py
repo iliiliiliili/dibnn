@@ -117,8 +117,8 @@ def main(
                         device=device,
                     )
 
-                    if agent_config.settings["agent"] in ["layer_ensembles", "ensembles"]:
-                        mns_list = [agent_config["max_num_samples"]]
+                    if agent_config.settings["agent"] in ["layer_ensembles", "ensemble"]:
+                        mns_list = [agent_config.settings["max_num_samples"]]
                     else:
                         mns_list = [*max_num_samples]
 

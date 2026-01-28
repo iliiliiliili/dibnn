@@ -42,6 +42,8 @@ float_fields = [
     "learning_rate",
     "mean_error",
     "std_error",
+    "val_kl",
+    "val_ll",
 ]
 int_fields = [
     "num_ensemble",

@@ -72,6 +72,7 @@ def gaussian_regression_loss(
         ) -> Tuple[torch.Tensor, enn_base.LossMetrics]:
 
             if replace_indices is not None:
+                old_indices = enn.indexer.batched(key, num_index_samples, device, correlated_index)
                 indices = replace_indices
             else:
                 indices = enn.indexer.batched(key, num_index_samples, device, correlated_index)

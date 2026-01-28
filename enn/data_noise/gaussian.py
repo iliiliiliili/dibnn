@@ -183,7 +183,7 @@ class GaussianTargetNoise(data_noise_base.DataNoise):
 
     enn: base.EpistemicNetwork
     noise_std: float
-    seed: int = 0
+    seed: int = 3
 
     def __call__(self, data: base.Batch, index: base.Index) -> base.Batch:
         """Apply Gaussian noise to the target y."""

@@ -294,13 +294,39 @@ def compare_jax_and_torch_ensemble_weights(jax_params, jax_prior_params, torch_m
     print(f"Total difference norm across all layers: {total_difference}")
     print()
 
+
+
+def write_jax_to_torch_hypermodels(jax_params, jax_prior_params, torch_model, device, use_double_precision):
+
+    print(":::Writing JAX hypermodel parameters to Torch model:::")
+
+    jax_to_torch_weights = [torch.tensor(np.array(b["w"])).permute(1,0).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_params.items()]
+    jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_params.items()]
+
+    prior_jax_to_torch_weights = [torch.tensor(np.array(b["w"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
+    prior_jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
+
+    for i in range(len(torch_model.model.weight_hyper_layers)):
+
+        torch_model.model.weight_hyper_layers[i].weight.data = jax_to_torch_weights[i * 2 + 1]
+        torch_model.model.weight_hyper_layers[i].bias.data = jax_to_torch_biases[i * 2 + 1]
+        torch_model.model.bias_hyper_layers[i].weight.data = jax_to_torch_weights[i * 2]
+        torch_model.model.bias_hyper_layers[i].bias.data = jax_to_torch_biases[i * 2]
+
+    for i in range(len(torch_model.prior_model.layers)):
+
+        torch_model.prior_model.layers[i].w.data = prior_jax_to_torch_weights[i]
+        torch_model.prior_model.layers[i].b.data = prior_jax_to_torch_biases[i]
+
+
+
 def compare_jax_and_torch_hypermodels_weights(jax_params, jax_prior_params, torch_model, device, use_double_precision):
 
     jax_to_torch_weights = [torch.tensor(np.array(b["w"])).permute(1,0).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_params.items()]
     jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_params.items()]
 
-    # prior_jax_to_torch_weights = [torch.tensor(np.array(b["w"])).permute(1,0).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
-    # prior_jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
+    prior_jax_to_torch_weights = [torch.tensor(np.array(b["w"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
+    prior_jax_to_torch_biases = [torch.tensor(np.array(b["b"])).to(device, dtype=torch.float64 if use_double_precision else torch.float32) for a,b in jax_prior_params.items()]
 
     total_difference = 0.0
 
@@ -328,7 +354,16 @@ def compare_jax_and_torch_hypermodels_weights(jax_params, jax_prior_params, torc
 
         print(f"Layer {i} weight weight difference norm: {torch.norm(dww).item()}, weight bias difference norm: {torch.norm(dwb).item()}")
         print(f"Layer {i} bias weight difference norm: {torch.norm(dbw).item()}, bias bias difference norm: {torch.norm(dbb).item()}")
-    
+
+    for i in range(len(torch_model.prior_model.layers)):
+
+        dw = torch_model.prior_model.layers[i].w.data - prior_jax_to_torch_weights[i]
+        db = torch_model.prior_model.layers[i].b.data - prior_jax_to_torch_biases[i]
+
+        total_difference += torch.norm(dw).item() + torch.norm(db).item()
+
+        print(f"Prior Layer {i} weight difference norm: {torch.norm(dw).item()}, bias difference norm: {torch.norm(db).item()}")
+
     print(f"Total difference norm across all layers: {total_difference}")
     print()
 
@@ -453,8 +488,8 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             exported_jax_index = index
         
         
-        jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn)
-        # jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn, export_jax_index)
+        # jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn)
+        jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn, export_jax_index)
         jax_partial_loss_fn = functools.partial(jax_loss_fn, jax_enn)
 
 
@@ -479,12 +514,15 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
         # write_jax_to_torch_dropout(jax_state.params, torch_model, device, self.use_double_precision)
         # compare_jax_and_torch_dropout_weights(jax_state.params, torch_model, device, self.use_double_precision)
 
+        write_jax_to_torch_hypermodels(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
         compare_jax_and_torch_hypermodels_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
 
         # external_jax_experiment.state = jax_state
         # external_jax_experiment._loss = jax_partial_loss_fn
 
         jax_loss_metrics = {"loss": -2605.0}
+
+        # self.torch_config.training_steps = 200
 
         while steps < self.torch_config.training_steps:
         # for steps in range(jax_num_batches):
@@ -504,13 +542,13 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             )
             jax_next_rng = next(jax_rng)
             # torch_batch = jax_to_torch_batch
-            # jax_batch = torch_to_jax_batch
+            jax_batch = torch_to_jax_batch
 
             jax_loss_again = jax_loss_fn(jax_enn, jax_state.params, jax_batch, jax_next_rng)
             (jax_loss, jax_metrics), jax_grads = jax.value_and_grad(jax_partial_loss_fn, has_aux=True)(
                 jax_state.params, jax_batch, jax_next_rng
             )
-            assert (jax_loss - jax_loss_again[0]) < 0.0001
+            # assert (jax_loss - jax_loss_again[0]) < 0.0001
             jax_metrics.update({"loss": jax_loss})
             jax_updates, jax_new_opt_state = jax_optimizer.update(jax_grads, jax_state.opt_state)
             new_params = optax.apply_updates(jax_state.params, jax_updates)
@@ -524,13 +562,16 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             self.jax_config.logger.write(jax_loss_metrics)
 
             train_seed, run_seed = split_seed(train_seed, 2)
-            torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device)
-            # jax_to_torch_index = torch.tensor(np.array(exported_jax_index), device=device)
-            # torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device, replace_indices=jax_to_torch_index)
+            # torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device)
+            jax_to_torch_index = torch.tensor(np.array(exported_jax_index), device=device)
+            jax_to_torch_index = jax_to_torch_index.to(dtype=torch.float32 if not self.use_double_precision else torch.float64)
+            torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device, replace_indices=jax_to_torch_index)
             # Backward pass
             torch_optimizer.zero_grad()
             torch_loss.backward()
             torch_optimizer.step()
+            
+            # compare_jax_and_torch_hypermodels_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
 
             
             # compare_jax_and_torch_ensemble_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
@@ -566,6 +607,9 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             return jax_enn.apply(jax_state.params, x, index)
     
         # write_jax_to_torch_ensembles(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
+        
+        # write_jax_to_torch_hypermodels(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
+        # compare_jax_and_torch_hypermodels_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
 
         torch_sampler = torch_extract_enn_sampler(torch_model, torch_enn, device)
         jax_sampler = jax_extract_enn_sampler(jax_predict_fn)

@@ -34,6 +34,11 @@ class PrngIndexer(base.EpistemicIndexer):
             return key
         return key
 
+    def batched(self, key: base.RngKey, num_samples: int, device: str, correlated_index: bool = False) -> base.Index:
+
+        result = split_seed(key, num_samples)
+
+        return result
 
 @dataclasses.dataclass
 class EnsembleIndexer(base.EpistemicIndexer):
@@ -159,13 +164,19 @@ class ScaledGaussianIndexer(base.EpistemicIndexer):
     scale: float = 1.0
 
     def __call__(self, key: base.RngKey, device) -> base.Index:
+        
         if isinstance(key, int):
             torch.manual_seed(key)
-            return torch.randn(self.index_dims, device=device) * self.scale
+            generator = None
         else:
-            return (
-                torch.randn(self.index_dims, generator=key, device=device) * self.scale
-            )
+            generator = key
+
+
+        result = (
+            torch.randn(self.index_dims, generator=generator, device=device) * self.scale / np.sqrt(np.prod(self.index_dims))
+        )
+
+        return result
 
     def batched(self, key: base.RngKey, num_samples: int, device: str, correlated_index: bool = False) -> base.Index:
 
@@ -175,9 +186,11 @@ class ScaledGaussianIndexer(base.EpistemicIndexer):
         else:
             generator = key
 
-        return (
-            torch.randn([num_samples, *self.index_dims], generator=generator, device=device) * self.scale
+        result = (
+            torch.randn([num_samples, *self.index_dims], generator=generator, device=device) * self.scale / np.sqrt(np.prod(self.index_dims))
         )
+
+        return result
 
 
 @dataclasses.dataclass
@@ -236,12 +249,13 @@ class GaussianWithUnitIndexer(base.EpistemicIndexer):
     scale: float = 1.0
 
     def __call__(self, key: base.RngKey) -> base.Index:
+        raise NotImplementedError()
         if isinstance(key, int):
             torch.manual_seed(key)
-            gaussian = torch.randn(self.index_dim) * self.scale
+            gaussian = torch.randn(self.index_dim) * self.scale / np.sqrt(self.index_dim)
             unit = torch.ones(1)
         else:
-            gaussian = torch.randn(self.index_dim, generator=key) * self.scale
+            gaussian = torch.randn(self.index_dim, generator=key) * self.scale / np.sqrt(self.index_dim)
             unit = torch.ones(1)
         return torch.cat([gaussian, unit])
 

@@ -472,7 +472,7 @@ def make_hypermodel_ctor(
         return agents.VanillaEnnConfig(
             enn_ctor=make_enn,
             loss_ctor=enn_losses.gaussian_regression_loss(
-                num_index_samples=index_dim * 20,
+                num_index_samples=1,
                 noise_scale=noise_scale,
                 l2_weight_decay=0,
             ),

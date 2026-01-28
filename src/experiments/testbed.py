@@ -268,6 +268,7 @@ class TestbedGPRegression(TestbedProblem):
         device: str = "cuda:0",
         greedy: bool = True,
         use_log_likelihood: bool = False,
+        verbose: bool = True,
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
         # Extract useful quantities from the gp sampler.
@@ -290,7 +291,7 @@ class TestbedGPRegression(TestbedProblem):
 
         if use_log_likelihood:
             torch.manual_seed(seed)
-            y_function_val = MultivariateNormal(posterior_mean_val, self.data_sampler.val_cov.to(device)).sample()
+            y_function_val = MultivariateNormal(posterior_mean_val, self.data_sampler.val_cov.to(device) + self.std_ridge * torch.eye(num_val, device=device)).sample()
             y_noise_val = torch.randn(num_val, 1, dtype = y_function_val.dtype, device=device) * noise_std
             y_val = y_function_val + y_noise_val.squeeze(-1)
 
@@ -386,33 +387,6 @@ class TestbedGPRegression(TestbedProblem):
 
             return result
 
-        def add_sample_to_best_single(best_samples):
-
-            best_kl = None
-            best_addition = None
-
-            for i in range(0, len(all_samples)):
-                if i not in best_samples:
-                    kl = evaluate_single_set_kl(
-                        [*best_samples, i], False
-                    )
-                    if (best_kl is None) or (best_kl.kl_estimate > kl.kl_estimate):
-                        print(
-                            len(best_samples) + 1,
-                            "bkl kl",
-                            best_kl.kl_estimate if best_kl is not None else None,
-                            kl.kl_estimate,
-                            "i",
-                            i,
-                            "/",
-                            len(all_samples),
-                            end="\r",
-                        )
-                        best_kl = kl
-                        best_addition = i
-
-            return [*best_samples, best_addition], best_kl
-
         def add_sample_to_best_kl(best_samples):
 
             all_sample_sets = []
@@ -462,10 +436,11 @@ class TestbedGPRegression(TestbedProblem):
 
                 best_kl = evaluate_single_set_kl([*best_samples], True)
 
-                if use_log_likelihood:
-                    print("++", len(best_samples), "kl", best_kl.kl_estimate, "val_ll", best_val_log_likelihood)
-                else:
-                    print("--", len(best_samples), "kl", best_kl.kl_estimate, "val_kl", best_val_kl.kl_estimate)
+                if verbose:
+                    if use_log_likelihood:
+                        print("++", len(best_samples), "kl", best_kl.kl_estimate, "val_ll", best_val_log_likelihood)
+                    else:
+                        print("--", len(best_samples), "kl", best_kl.kl_estimate, "val_kl", best_val_kl.kl_estimate)
 
                 if num_samples > 1:
 
@@ -479,7 +454,6 @@ class TestbedGPRegression(TestbedProblem):
                     else:
                         results[num_samples]["best_val_kl"] = best_val_kl
 
-            
             return results
     
         if greedy:
