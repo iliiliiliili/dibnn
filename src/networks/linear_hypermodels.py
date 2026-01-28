@@ -87,13 +87,6 @@ class MlpLinearHypermodelEnn(base.EpistemicNetwork):
                     )
                 ):
 
-                    # weight = weight_hyper_layer(indices).reshape(
-                    #     -1, output_sizes[i+1], output_sizes[i]
-                    # )
-                    # bias = bias_hyper_layer(indices).reshape(
-                    #     -1, output_sizes[i+1]
-                    # )
-
                     weight = weight_hyper_layer(indices).reshape(
                         indices.shape[0], output_sizes[i], output_sizes[i+1]
                     )

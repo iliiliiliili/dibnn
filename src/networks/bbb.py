@@ -35,7 +35,7 @@ class MlpBbbEnn(base.EpistemicNetwork):
         sigma_init: Optional[callable] = None,
         mu_init: Optional[callable] = None,
         scale_down_weights=True,
-        use_double_precision: bool = True,
+        use_double_precision: bool = False,
     ):
 
         mu_init = mu_init if mu_init is not None else torch.nn.init.zeros_

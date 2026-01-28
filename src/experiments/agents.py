@@ -61,7 +61,6 @@ class VanillaEnnConfig:
             print("Using default Adam optimizer with lr=1e-3")
             self.optimizer_ctor = lambda params: optim.Adam(params, lr=1e-3)
         if self.training_steps is None:
-            # self.training_steps = 2000
             self.training_steps = 1000
 
 
@@ -135,6 +134,14 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
         # Create data batch
         enn_data = enn_base.Batch(data.x, data.y)
+
+        if self.config.training_steps == -1:
+            n_data = len(enn_data.y)
+
+            if n_data < 1000:
+                self.config.training_steps = 200
+            else:
+                self.config.training_steps = 1000
 
         # Create data loader
         dataset = utils.make_batch_iterator(

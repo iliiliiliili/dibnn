@@ -18,7 +18,7 @@
 
 import dataclasses
 from functools import reduce
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 from src import networks
 from src import base as enn_base
@@ -238,49 +238,6 @@ def make_ensemble_ctor(
     return make_agent_config
 
 
-def make_layer_ensemble_agent(
-    num_ensembles: List[int],
-    noise_scale: float,
-    prior_scale: float,
-    hidden_size: int = 50,
-    num_layers: int = 2,
-    inference_samples: List[int] = ["full"],
-    learning_rate: float = 1e-3,
-    seed: int = 0,
-) -> testbed_base.TestbedAgent:
-    """Factory for creating a layer ensemble agent."""
-
-    num_samples = reduce(lambda x, y: x * y, num_ensembles)
-
-    def enn_ctor(prior: testbed_base.PriorKnowledge):
-        return networks.LayerEnsembleNetworkWithPriors(
-            output_sizes=output_sizes,
-            num_ensembles=num_ensembles,
-            prior_scale=1.0,
-            seed=seed,
-        )
-
-    def optimizer_ctor(params):
-        return optim.Adam(params, lr=learning_rate)
-
-    def make_agent_config() -> agents.VanillaEnnConfig:
-        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
-        config = agents.VanillaEnnConfig(
-            enn_ctor=enn_ctor,
-            loss_ctor=enn_losses.gaussian_regression_loss(
-                num_samples, noise_scale, l2_weight_decay=0
-            ),
-            optimizer_ctor=optimizer_ctor,
-            num_batches=num_batches,
-            batch_size=batch_size,
-            seed=seed,
-        )
-
-        return agents.VanillaEnnAgent(config)
-
-    return make_agent_config()
-
-
 def make_layer_ensemble_ctor(
     num_ensembles: List[int],
     noise_scale: float,
@@ -326,6 +283,100 @@ def make_layer_ensemble_ctor(
         )
 
     return make_agent_config
+
+
+
+def make_vnn_ctor(
+    activation: Optional[Union[Callable, List[Callable]]] = None,
+    activation_mode: Union[
+        Literal["mean"],
+        Literal["std"],
+        Literal["mean+std"],
+        Literal["end"],
+        Literal["mean+end"],
+        Literal["std+end"],
+        Literal["mean+std+end"],
+    ] = "mean",
+    use_batch_norm: bool = False,
+    batch_norm_mode: Union[
+        Literal["mean"],
+        Literal["std"],
+        Literal["mean+std"],
+        Literal["end"],
+        Literal["mean+end"],
+        Literal["std+end"],
+        Literal["mean+std+end"],
+    ] = "mean",
+    global_std_mode: Union[
+        Literal["none"], Literal["replace"], Literal["multiply"]
+    ] = "none",
+    num_index_samples: int = 10,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    learning_rate: float = 1e-3,
+    seed: int = 0,
+    training_steps: int = 1000,
+    initializer: Tuple[Optional[str], Optional[str]] = (None, None),
+    loss_function: str = "gaussian",
+    noise_scale: float = 1,
+    batch_size: Optional[int] = None,
+) -> ConfigCtor:
+    """Generate a dropout agent config."""
+
+    # def get_cosine_lr_scheduler(init_lr, final_lr, n_epoch=1000):
+    #     import numpy as np
+
+    #     def lr_scheduler(epoch_idx):
+    #         lr = final_lr + 0.5 * (init_lr - final_lr) * (
+    #             1 + torch.cos(torch.pi * epoch_idx / n_epoch)
+    #         )
+    #         return lr
+
+    #     return lr_scheduler
+
+    def make_enn(prior: testbed_base.PriorKnowledge, use_double_precision: bool = False) -> enn_base.EpistemicNetwork:
+        output_sizes = (
+            [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        )
+        return networks.MLPVariationalENN(
+            output_sizes=output_sizes,
+            activation=activation,
+            activation_mode=activation_mode,
+            use_batch_norm=use_batch_norm,
+            batch_norm_mode=batch_norm_mode,
+            global_std_mode=global_std_mode,
+            initializer=initializer,
+            seed=seed,
+            use_double_precision=use_double_precision,
+        )
+
+    def optimizer_ctor(params):
+        return optim.Adam(params, lr=learning_rate)
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        """Factory method to create agent_config, swap this for different agents."""
+
+        if loss_function == "gaussian":
+            loss_ctor = enn_losses.gaussian_regression_loss(
+                num_index_samples, noise_scale, l2_weight_decay=0
+            )
+        # elif loss_function == "nelbo":
+        #     loss_ctor = enn_losses.bbb_loss(
+        #         sigma_0=sigma_0, num_index_samples=num_index_samples
+        #     )
+        else:
+            raise ValueError(loss_function + "is an unknown loss_function")
+
+        return agents.VanillaEnnConfig(
+            enn_ctor=make_enn,
+            loss_ctor=loss_ctor,
+            optimizer_ctor=optimizer_ctor,
+            training_steps=training_steps,
+            batch_size=batch_size,
+        )
+
+    return make_agent_config
+
 
 
 def make_dropout_sweep() -> List[AgentCtorConfig]:
@@ -572,7 +623,6 @@ def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
-
 def make_hypermodel_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     """Generates the benchmark sweep for paper results."""
     sweep = []
@@ -598,7 +648,6 @@ def make_hypermodel_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
                         sweep.append(AgentCtorConfig(settings, config_ctor))
 
     return sweep
-
 
 
 def make_hypermodel_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
@@ -628,6 +677,128 @@ def make_hypermodel_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_vnn_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    for activation in ["lrelu", "relu", "tanh"]:
+        for learning_rate in [1e-3, 1e-4, 5e-5]:
+            for num_layers in [2, 3]:
+                for hidden_size in [50, 100]:
+                    for activation_mode in [
+                        "mean",
+                        "mean+std",
+                        "mean+end",
+                        "end",
+                        "none",
+                    ]:
+                        for use_batch_norm in [False]:
+                            for global_std_mode in ["none", "replace", "multiply"]:
+                                for num_index_samples in [10, 100]:
+                                    for training_steps in [1000, 3000, -1]:
+                                        batch_norm_mode = activation_mode
+
+                                        current_activation = {
+                                            "relu": torch.nn.ReLU(),
+                                            "tanh": torch.nn.Tanh(),
+                                            "lrelu": torch.nn.LeakyReLU(),
+                                        }[activation]
+
+                                        if len(activation_mode.split("+")) > 1:
+                                            current_activation = [
+                                                current_activation
+                                            ] * len(activation_mode.split("+"))
+
+                                        settings = {
+                                            "agent": "vnn",
+                                            "activation": activation,
+                                            "learning_rate": learning_rate,
+                                            "num_layers": num_layers,
+                                            "hidden_size": hidden_size,
+                                            "activation_mode": activation_mode,
+                                            "batch_norm_mode": batch_norm_mode,
+                                            "use_batch_norm": use_batch_norm,
+                                            "global_std_mode": global_std_mode,
+                                            "training_steps": training_steps,
+                                            "num_index_samples": num_index_samples,
+                                        }
+                                        config_ctor = make_vnn_ctor(
+                                            current_activation,
+                                            activation_mode,
+                                            use_batch_norm,
+                                            batch_norm_mode,
+                                            global_std_mode,
+                                            num_index_samples,
+                                            hidden_size,
+                                            training_steps=training_steps,
+                                            batch_size=1000 if reduce_batch else None,
+                                        )
+                                        sweep.append(
+                                            AgentCtorConfig(settings, config_ctor)
+                                        )
+
+    return sweep
+
+
+def make_vnn_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    for activation in ["relu"]:
+        for learning_rate in [1e-3]:
+            for num_layers in [3]:
+                for hidden_size in [100]:
+                    for activation_mode in [
+                        "mean",
+                    ]:
+                        for use_batch_norm in [False]:
+                            for global_std_mode in ["multiply"]:
+                                for num_index_samples in [100]:
+                                    for training_steps in [-1]:
+                                        batch_norm_mode = activation_mode
+
+                                        current_activation = {
+                                            "relu": torch.nn.ReLU(),
+                                            "tanh": torch.nn.Tanh(),
+                                            "lrelu": torch.nn.LeakyReLU(),
+                                        }[activation]
+
+                                        if len(activation_mode.split("+")) > 1:
+                                            current_activation = [
+                                                current_activation
+                                            ] * len(activation_mode.split("+"))
+
+                                        settings = {
+                                            "agent": "vnn",
+                                            "activation": activation,
+                                            "learning_rate": learning_rate,
+                                            "num_layers": num_layers,
+                                            "hidden_size": hidden_size,
+                                            "activation_mode": activation_mode,
+                                            "batch_norm_mode": batch_norm_mode,
+                                            "use_batch_norm": use_batch_norm,
+                                            "global_std_mode": global_std_mode,
+                                            "training_steps": training_steps,
+                                            "num_index_samples": num_index_samples,
+                                        }
+                                        config_ctor = make_vnn_ctor(
+                                            current_activation,
+                                            activation_mode,
+                                            use_batch_norm,
+                                            batch_norm_mode,
+                                            global_std_mode,
+                                            num_index_samples,
+                                            hidden_size,
+                                            training_steps=training_steps,
+                                            batch_size=1000 if reduce_batch else None,
+                                        )
+                                        sweep.append(
+                                            AgentCtorConfig(settings, config_ctor)
+                                        )
+
+    return sweep
+
+
 def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCtorConfig]:
 
     if agent == "all":
@@ -652,6 +823,10 @@ def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCt
         agent_sweep = make_hypermodel_sweep()
     elif agent == "hypermodel_best":
         agent_sweep = make_hypermodel_best_sweep(reduce_batch=reduce_batch)
+    elif agent == "vnn":
+        agent_sweep = make_vnn_sweep(reduce_batch=reduce_batch)
+    elif agent == "vnn_best":
+        agent_sweep = make_vnn_best_sweep(reduce_batch=reduce_batch)
     else:
         raise ValueError(f"agent={agent} is not valid!")
 

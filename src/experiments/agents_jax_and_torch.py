@@ -488,8 +488,8 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             exported_jax_index = index
         
         
-        # jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn)
-        jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn, export_jax_index)
+        jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn)
+        # jax_loss_fn = self.jax_config.loss_ctor(jax_prior, jax_enn, export_jax_index)
         jax_partial_loss_fn = functools.partial(jax_loss_fn, jax_enn)
 
 
@@ -514,8 +514,8 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
         # write_jax_to_torch_dropout(jax_state.params, torch_model, device, self.use_double_precision)
         # compare_jax_and_torch_dropout_weights(jax_state.params, torch_model, device, self.use_double_precision)
 
-        write_jax_to_torch_hypermodels(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
-        compare_jax_and_torch_hypermodels_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
+        # write_jax_to_torch_hypermodels(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
+        # compare_jax_and_torch_hypermodels_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
 
         # external_jax_experiment.state = jax_state
         # external_jax_experiment._loss = jax_partial_loss_fn
@@ -562,10 +562,10 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             self.jax_config.logger.write(jax_loss_metrics)
 
             train_seed, run_seed = split_seed(train_seed, 2)
-            # torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device)
-            jax_to_torch_index = torch.tensor(np.array(exported_jax_index), device=device)
-            jax_to_torch_index = jax_to_torch_index.to(dtype=torch.float32 if not self.use_double_precision else torch.float64)
-            torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device, replace_indices=jax_to_torch_index)
+            torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device)
+            # jax_to_torch_index = torch.tensor(np.array(exported_jax_index), device=device)
+            # jax_to_torch_index = jax_to_torch_index.to(dtype=torch.float32 if not self.use_double_precision else torch.float64)
+            # torch_loss, torch_metrics = torch_loss_fn(torch_enn, torch_model, torch_batch, run_seed, device, replace_indices=jax_to_torch_index)
             # Backward pass
             torch_optimizer.zero_grad()
             torch_loss.backward()

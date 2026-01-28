@@ -318,7 +318,7 @@ summary_select_agent_params = {
     ],
     "vnn": [
         {
-            "activation": ["relu", "tanh"],
+            "activation": ["relu"],
             # "activation_mode": ["mean"],
             # "global_std_mode": ["multiply"],
             "activation_mode": ["mean"],
@@ -326,7 +326,7 @@ summary_select_agent_params = {
             "num_layers": [3],
             "hidden_size": [100],
             "num_index_samples": [100],
-            "num_batches": ["1000"],
+            "training_steps": [-1],
         },
     ],
     "layer_ensemble": [
@@ -482,9 +482,9 @@ def make_vnn_ranked_params(num_samples, use_ranked):
                     + ("f" if samples == "full" else ""),
                     "activation": ["relu", "tanh"],
                     "num_layers": [3],
-                    "hidden_size": [50],
+                    "hidden_size": [100],
                     "num_index_samples": [100],
-                    "num_batches": ["1000"],
+                    "training_steps": [-1],
                     "max_num_samples": [max_num_samples],
                     "indexer": [indexer],
                 }
