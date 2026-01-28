@@ -424,6 +424,7 @@ def main(
     results_folder="results",
     use_double_precision=False,
     reduce_batch_dims=[],
+    lens_max_num_samples=[125],
 ):
     """Run testbed sweep.
 
@@ -455,8 +456,7 @@ def main(
         single_mns_per_experiment = True
     
     if "layer_ensembles" in agent_name:
-        raise NotImplementedError("Layer ensembles combination not implemented yet")
-        max_num_samples = []
+        max_num_samples = lens_max_num_samples
         single_mns_per_experiment = False
 
 

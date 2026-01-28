@@ -41,7 +41,7 @@ class MlpEnsembleEnn(base.EpistemicNetwork):
         nonzero_bias: bool = True,
         w_init: Optional[Callable] = None,
         b_init: Optional[Callable] = None,
-        use_double_precision: bool = True,
+        use_double_precision: bool = False,
     ):
 
         class EnsembleMlp(nn.Module):
@@ -125,7 +125,7 @@ class MlpEnsembleEnnWithAdditivePrior(base.EpistemicNetwork):
         nonzero_bias: bool = True,
         w_init: Optional[Callable] = None,
         b_init: Optional[Callable] = None,
-        use_double_precision: bool = True,
+        use_double_precision: bool = False,
     ):
 
         enn = MlpEnsembleEnn(

@@ -92,42 +92,22 @@ class LayerEnsembleIndexer(base.EpistemicIndexer):
     """Index into a layer ensemble by integer."""
 
     num_ensembles: Sequence[int]
-    correlated: bool = False
 
-    def __call__(self, key: base.RngKey) -> base.Index:
-        if isinstance(key, int):
-            keys = [key + i for i in range(len(self.num_ensembles))]
-        else:
-            # Split key for each layer
-            keys = [
-                torch.Generator().manual_seed(key + i)
-                for i in range(len(self.num_ensembles))
-            ]
-
-        if self.correlated:
-            if isinstance(keys[0], int):
-                torch.manual_seed(keys[0])
-                index = torch.randint(0, self.num_ensembles[0], []).item()
-            else:
-                index = torch.randint(
-                    0, self.num_ensembles[0], [], generator=keys[0]
-                ).item()
-            return torch.tensor([index for _ in self.num_ensembles])
+    def __call__(self, key: base.RngKey, device: str) -> base.Index:
+        keys = split_seed(key, len(self.num_ensembles))
 
         indices = []
+
+        generator = torch.Generator()
+
         for i, (k, num_ensemble) in enumerate(zip(keys, self.num_ensembles)):
-            if isinstance(k, int):
-                torch.manual_seed(k)
-                idx = torch.randint(0, num_ensemble, []).item()
-            else:
-                idx = torch.randint(0, num_ensemble, [], generator=k).item()
+            generator.manual_seed(k)
+            idx = torch.randint(0, num_ensemble, []).item()
             indices.append(idx)
 
-        return torch.tensor(indices)
+        return torch.tensor(indices, device=device)
 
-    def batched(self, key: base.RngKey, num_samples: int) -> base.Index:
-        if self.correlated:
-            raise NotImplementedError()
+    def batched(self, key: base.RngKey, num_samples: int, device: str, correlated_index: bool = False) -> base.Index:
 
         def create_all_samples(i, num_ensembles, prefix):
             result = []
@@ -142,7 +122,7 @@ class LayerEnsembleIndexer(base.EpistemicIndexer):
             return result
 
         all_samples = create_all_samples(0, self.num_ensembles, [])
-        all_samples = torch.tensor(all_samples)
+        all_samples = torch.tensor(all_samples, device=device)
 
         if isinstance(key, int):
             torch.manual_seed(key)
@@ -150,7 +130,7 @@ class LayerEnsembleIndexer(base.EpistemicIndexer):
         else:
             generator = key
 
-        choices = torch.randperm(len(all_samples), generator=generator)[:num_samples]
+        choices = torch.randperm(len(all_samples), generator=generator, device=device)[:num_samples]
         results = all_samples[choices]
 
         return results

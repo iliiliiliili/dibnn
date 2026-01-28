@@ -238,53 +238,6 @@ def make_ensemble_ctor(
     return make_agent_config
 
 
-def make_layer_ensemble_ctor(
-    num_ensembles: List[int],
-    noise_scale: float,
-    prior_scale: float,
-    hidden_size: int = 50,
-    num_layers: int = 2,
-    inference_samples: List[int] = ["full"],
-    seed: int = 0,
-) -> ConfigCtor:
-    """Generate an ensemble agent config."""
-
-    num_samples = reduce(lambda x, y: x * y, num_ensembles)
-
-    inference_samples = [
-        (int(x) * num_ensembles[0] if x != "full" else num_samples)
-        for x in inference_samples
-    ]
-
-    def make_enn(prior: testbed_base.PriorKnowledge) -> enn_base.EpistemicNetwork:
-        output_sizes = list([hidden_size] * num_layers) + [prior.num_classes]
-        return networks.make_true_einsum_layer_ensemble_mlp_with_prior_enn(
-            output_sizes=output_sizes,
-            num_ensembles=num_ensembles,
-            prior_scale=prior_scale,
-            dummy_input=jnp.ones([prior.num_train, prior.input_dim]),
-            dummy_index=jnp.zeros([len(num_ensembles)]),
-            # correlated=True,
-        )
-
-    def make_agent_config() -> agents.VanillaEnnConfig:
-        """Factory method to create agent_config, swap this for different agents."""
-
-        return agents.VanillaEnnConfig(
-            enn_ctor=make_enn,
-            loss_ctor=enn_losses.gaussian_regression_loss(
-                num_samples, noise_scale, l2_weight_decay=0
-            ),
-            num_batches=1000,  # Irrelevant for bandit
-            logger=loggers.make_default_logger("experiment", time_delta=0),
-            seed=seed,
-            inference_samples=inference_samples,
-            max_num_samples=num_samples,
-        )
-
-    return make_agent_config
-
-
 
 def make_vnn_ctor(
     activation: Optional[Union[Callable, List[Callable]]] = None,
@@ -377,6 +330,57 @@ def make_vnn_ctor(
 
     return make_agent_config
 
+
+def make_layer_ensembles_ctor(
+    num_ensembles: List[int],
+    noise_scale: float,
+    prior_scale: float,
+    learning_rate: float,
+    hidden_size: int = 50,
+    num_layers: int = 2,
+    inference_samples: List[int] = ["full"],
+    training_steps: Optional[int] = None,
+    batch_size: Optional[int] = None,
+) -> ConfigCtor:
+    """Generate an ensemble agent config."""
+
+    num_samples = reduce(lambda x, y: x * y, num_ensembles)
+
+    inference_samples = [
+        (int(x) * num_ensembles[0] if x != "full" else num_samples)
+        for x in inference_samples
+    ]
+
+    def make_enn(prior: testbed_base.PriorKnowledge, use_double_precision: bool = False) -> enn_base.EpistemicNetwork:
+        output_sizes = (
+            [prior.input_dim] + list([hidden_size] * num_layers) + [prior.num_classes]
+        )
+        return networks.MlpLayerEnsembleEnnWithAdditivePrior(
+            output_sizes=output_sizes,
+            num_ensembles=num_ensembles,
+            prior_scale=prior_scale,
+            use_double_precision=use_double_precision,
+        )
+
+    def optimizer_ctor(params):
+        return optim.Adam(params, lr=learning_rate)
+
+    def make_agent_config() -> agents.VanillaEnnConfig:
+        config = agents.VanillaEnnConfig(
+            enn_ctor=make_enn,
+            loss_ctor=enn_losses.gaussian_regression_loss(
+                num_samples, noise_scale, l2_weight_decay=0
+            ),
+            optimizer_ctor=optimizer_ctor,
+            training_steps=training_steps,
+            batch_size=batch_size,
+            inference_samples=inference_samples,
+            max_num_samples=num_samples,
+        )
+
+        return config
+
+    return make_agent_config
 
 
 def make_dropout_sweep() -> List[AgentCtorConfig]:
@@ -799,6 +803,96 @@ def make_vnn_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     return sweep
 
 
+def make_layer_ensembles_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting ensemble agents
+    # for num_ensemble in [2, 3]:
+    for num_ensemble, inference_samples in [
+        (2, ["full"]),
+        (3, ["full"]),
+        (5, ["full"]),
+        (6, ["full"]),
+        (8, ["full"]),
+        (10, ["full"]),
+    ]:
+        for noise_scale in [1]:
+            for prior_scale in [1]:
+                for num_layers in [2]:
+                    for hidden_size in [50]:
+                        num_ensembles = [num_ensemble for _ in range(num_layers + 1)]
+                        max_num_samples = reduce(lambda x, y: x * y, num_ensembles)
+
+                        settings = {
+                            "agent": "layer_ensembles",
+                            "num_ensembles": num_ensembles,
+                            "inference_samples": str(inference_samples),
+                            "noise_scale": noise_scale,
+                            "prior_scale": prior_scale,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                            "max_num_samples": max_num_samples,
+                        }
+                        config_ctor = make_layer_ensembles_ctor(
+                            num_ensembles=num_ensembles,
+                            noise_scale=noise_scale,
+                            prior_scale=prior_scale,
+                            learning_rate=1e-3,
+                            hidden_size=hidden_size,
+                            num_layers=num_layers,
+                            inference_samples=inference_samples,
+                            training_steps=1000,
+                            batch_size=1000 if reduce_batch else None,
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
+def make_layer_ensembles_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting ensemble agents
+    # for num_ensemble in [2, 3]:
+    for num_ensemble, inference_samples in [
+        (5, ["full"]),
+    ]:
+        for noise_scale in [1]:
+            for prior_scale in [1]:
+                for num_layers in [2]:
+                    for hidden_size in [50]:
+                        num_ensembles = [num_ensemble for _ in range(num_layers + 1)]
+                        max_num_samples = reduce(lambda x, y: x * y, num_ensembles)
+
+                        settings = {
+                            "agent": "layer_ensembles",
+                            "num_ensembles": num_ensembles,
+                            "inference_samples": str(inference_samples),
+                            "noise_scale": noise_scale,
+                            "prior_scale": prior_scale,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                            "max_num_samples": max_num_samples,
+                        }
+                        config_ctor = make_layer_ensembles_ctor(
+                            num_ensembles=num_ensembles,
+                            noise_scale=noise_scale,
+                            prior_scale=prior_scale,
+                            learning_rate=1e-3,
+                            hidden_size=hidden_size,
+                            num_layers=num_layers,
+                            inference_samples=inference_samples,
+                            training_steps=1000,
+                            batch_size=1000 if reduce_batch else None,
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
+
 def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCtorConfig]:
 
     if agent == "all":
@@ -827,6 +921,10 @@ def make_agent_sweep(agent: str = "all", reduce_batch=False) -> Sequence[AgentCt
         agent_sweep = make_vnn_sweep(reduce_batch=reduce_batch)
     elif agent == "vnn_best":
         agent_sweep = make_vnn_best_sweep(reduce_batch=reduce_batch)
+    elif agent == "layer_ensembles":
+        agent_sweep = make_layer_ensembles_sweep(reduce_batch=reduce_batch)
+    elif agent == "layer_ensembles_best":
+        agent_sweep = make_layer_ensembles_best_sweep(reduce_batch=reduce_batch)
     else:
         raise ValueError(f"agent={agent} is not valid!")
 

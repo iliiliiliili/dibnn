@@ -196,7 +196,7 @@ agent_plot_params = {
         "shape": "factor(hidden_size)",
         "fill": "initializer",
     },
-    "layer_ensemble": {
+    "layer_ensembles": {
         "x": "num_ensemble",
         "y": "kl",
         "val_y": "val_kl_mean",
@@ -329,32 +329,6 @@ summary_select_agent_params = {
             "training_steps": [-1],
         },
     ],
-    "layer_ensemble": [
-        {
-            "agent_suffix": "_2",
-            "noise_scale": [1.0],
-            "prior_scale": [1.0],
-            "num_layers": [2],
-            "hidden_size": [50],
-            "num_ensemble": [2],
-        },
-        {
-            "agent_suffix": "_3",
-            "noise_scale": [1.0],
-            "prior_scale": [1.0],
-            "num_layers": [2],
-            "hidden_size": [50],
-            "num_ensemble": [3],
-        },
-        {
-            "agent_suffix": "_5",
-            "noise_scale": [1.0],
-            "prior_scale": [1.0],
-            "num_layers": [2],
-            "hidden_size": [50],
-            "num_ensemble": [5],
-        },
-    ],
     "layer_ensemble_cor": [
         {
             "noise_scale": [1.0],
@@ -407,12 +381,12 @@ summary_select_agent_params = {
             "num_ensemble": [5],
         },
     ],
-    "true_layer_ensemble_einsum_cor": [],
+    "layer_ensembles": [],
     "subsample_ensemble": [],
 }
 
 
-def add_true_layer_ensemble_einsum_cor_summary_params(use_ranked):
+def add_layer_ensembles_summary_params(use_ranked):
 
     if use_ranked:
         all_nens_samples = [
@@ -456,7 +430,7 @@ def add_true_layer_ensemble_einsum_cor_summary_params(use_ranked):
                 "num_ensemble": [num_ensemble],
                 "indexer": [indexer],
             }
-            summary_select_agent_params["true_layer_ensemble_einsum_cor"].append(params)
+            summary_select_agent_params["layer_ensembles"].append(params)
 
 
 def make_vnn_ranked_params(num_samples, use_ranked):

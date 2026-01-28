@@ -28,15 +28,16 @@ from src.networks.linear_hypermodels import MlpLinearHypermodelEnn, MlpLinearHyp
 
 # Ensemble
 from src.networks.ensembles import MlpEnsembleEnnWithAdditivePrior
+from src.networks.layer_ensembles import MlpLayerEnsembleEnnWithAdditivePrior
 
 # Layer Ensemble
-from src.networks.layer_ensembles import LayerEnsembleNetworkWithPriors
-from src.networks.layer_ensembles import LayerEnsembleNetwork
-from src.networks.layer_ensembles import make_einsum_layer_ensemble_mlp_with_prior_enn
-from src.networks.layer_ensembles import (
-    make_true_einsum_layer_ensemble_mlp_with_prior_enn,
+from src.networks.layer_ensembles_fake import LayerEnsembleNetworkWithPriors
+from src.networks.layer_ensembles_fake import LayerEnsembleNetwork
+from src.networks.layer_ensembles_fake import make_einsum_layer_ensemble_mlp_with_prior_enn
+from src.networks.layer_ensembles_fake import (
+    make_layer_ensembles_mlp_with_prior_enn,
 )
-from src.networks.layer_ensembles import make_layer_ensemble_cor_mlp_with_prior_enn
+from src.networks.layer_ensembles_fake import make_layer_ensemble_cor_mlp_with_prior_enn
 
 # Indexers
 from src.networks.indexers import DirichletIndexer

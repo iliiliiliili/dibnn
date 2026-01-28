@@ -72,7 +72,6 @@ def make_noise_fn(
 def _make_ensemble_gaussian_noise(noise_std: float, seed: int) -> NoiseFn:
     """Factory method to add Gaussian noise for ensemble index."""
 
-
     def noise_fn(data_index: base.DataIndex, index: base.Index, device: str) -> torch.Tensor:
         """Assumes integer index for ensemble."""
         batch_size = data_index.shape[0]
@@ -104,25 +103,27 @@ def _make_layer_ensemble_gaussian_noise(
 ) -> NoiseFn:
     """Factory method to add Gaussian noise for layer ensemble index."""
 
-    def noise_fn(data_index: base.DataIndex, input_index: base.Index) -> base.Tensor:
+    def noise_fn(data_index: base.DataIndex, index: base.Index, device: str) -> torch.Tensor:
         """Assumes integer index for ensemble."""
-        raise Exception("Not implemented for PyTorch.")
         batch_size = data_index.shape[0]
+        
+        generator = torch.Generator(device=device)
+        
+        def indexed_randn(index: int, device: str):
+            """Generates indexed random normal samples."""
+            generator.manual_seed(index)
+            sample = torch.randn(1, generator=generator, device=device)[0]
+            return sample
+        
+        # if not index.shape:
+        #     index = index.repeat(batch_size)
+        
+        index = index.sum(dim=-1).unsqueeze(0).repeat(batch_size, 1)
+        index += seed
+        index += data_index
 
-        if len(input_index.shape) > 1:
-            total_index = 0
-            f = 1
-            for i in input_index[0, :]:
-                total_index += i.item() * f
-                f *= factor
-            index = torch.full((batch_size,), total_index, dtype=torch.long)
-        else:
-            index = torch.full((batch_size,), input_index.item(), dtype=torch.long)
-        
-        generator = torch.Generator()
-        generator.manual_seed(seed)
-        
-        samples = torch.randn(batch_size, 1, generator=generator) * noise_std
+        samples = torch.stack([indexed_randn(idx.item(), device) for idx in index.reshape(-1)]).reshape(index.shape) * noise_std
+        samples = samples.T.unsqueeze(-1)
         return samples
 
     return noise_fn
