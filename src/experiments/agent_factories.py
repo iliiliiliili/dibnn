@@ -594,7 +594,7 @@ def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
     sweep = []
 
     # Adding reasonably interesting ensemble agents
-    for num_ensemble in [10, 30]:
+    for num_ensemble in [30]:
         for noise_scale in [1]:
             for prior_scale in [1]:
                 for num_layers in [2]:

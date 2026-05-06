@@ -427,7 +427,7 @@ class TestbedGPRegression(TestbedProblem):
 
             best_samples = []
 
-            for num_samples in range(1, len(all_samples)):
+            for num_samples in range(1, len(all_samples) + 1):
 
                 if use_log_likelihood:
                     best_samples, best_val_log_likelihood = add_sample_to_best_log_likelihood(best_samples)

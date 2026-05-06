@@ -1279,6 +1279,9 @@ def plot_ranked_ensemble_summary(
 
         for filter in filters:
 
+            if len(filters) > 20:
+                print(",", end="")
+
             frames = all_frames
             old_frames = None
             agent_suffix = ""
@@ -1360,24 +1363,26 @@ def plot_ranked_ensemble_summary(
         )
         + scale_y_continuous(trans="log10", limits=y_limit)
         + scale_x_continuous(trans="log10")
-        + geom_point(aes(colour="agent"), size=3, stroke=0.1)
         + geom_errorbar(
-            aes(colour="'#FFBB00'", ymin="low_mstd", ymax="high_mstd"),
+            aes(colour=f"'Validation {'KL' if is_log_likelihood else 'NLL'} STD'", ymin="low_vmstd", ymax="high_vmstd"),
+            width=0.03,
+            size=0.4,
+            alpha=0.6,
+        )
+        + geom_errorbar(
+            aes(colour="'Test KL STD'", ymin="low_mstd", ymax="high_mstd"),
             width=0.04,
             size=0.6,
+            alpha=0.6,
         )
-        + geom_point(aes(x="indexer", y="val_mean", colour="'green'"), size=2, stroke=0.1, shape="^")
-        + geom_errorbar(
-            aes(colour="'#999900'", ymin="low_vmstd", ymax="high_vmstd"),
-            width=0.02,
-            size=0.2,
-        )
+        + geom_point(aes(colour="agent"), size=3, stroke=0.1)
+        + geom_point(aes(x="indexer", y="val_mean", colour=f"'Validation {'KL' if is_log_likelihood else 'NLL'}'"), size=2, stroke=0.1, shape="^")
         + theme(
             axis_title=element_text(size=15),
             axis_text=element_text(size=8),
             figure_size=(12, 4),
         )
-        + scale_color_discrete(guide=False)
+        + scale_color_discrete(guide=guide_legend())
         # + scale_x_discrete(guide=guide_legend())
         + ylab("Mean Test KL / Val " + ("NLL" if is_log_likelihood else "KL"))
         + xlab("Number of samples")
@@ -1416,7 +1421,7 @@ def plot_combined_ranked_ensemble_summary(
     allowed_max_num_samples=None,
     allowed_data_ratios=None,
     is_log_likelihood=False,
-    y_limit=(0.1, 100),
+    y_limit=(0.1, 10),
 ):
 
     all_agent_frames = {}
@@ -1583,7 +1588,6 @@ def plot_combined_ranked_ensemble_summary(
             "layer\nensembles",
         ],
     )
-
     plot = (
         ggplot(frame)
         + aes(x="agent_full", y="mean")
@@ -1593,32 +1597,34 @@ def plot_combined_ranked_ensemble_summary(
             ["num_ensemble"],
             ncol=3,
             labeller=labeller(
-                cols=lambda x: ("Full inference KL vs " + ("NLL" if is_log_likelihood else "KL") + "-based ranking KL")
+                cols=lambda x: ("Full inference KL vs. " + ("NLL" if is_log_likelihood else "KL") + "-based ranking KL")
             ),
         )
         + scale_y_continuous(trans="log10", limits=y_limit)
         # + scale_x_continuous(trans="log10")
-        + geom_point(aes(colour="agent_full"), size=6, stroke=0.1)
         + geom_errorbar(
-            aes(colour="'#FFBB00'", ymin="low_mstd", ymax="high_mstd", alpha=0.6),
+            aes(colour="'Full Inference'", ymin="low_mstd", ymax="high_mstd"),
             width=0.12,
             size=0.9,
+            alpha=0.6,
         )
-        + geom_point(aes(x="agent_full", y="last_mean", colour="'green'"), size=3, stroke=0.1, shape="s")
         + geom_errorbar(
-            aes(colour="'#009999'", ymin="low_lmstd", ymax="high_lmstd", alpha=0.6),
+            aes(colour="'Ranked Selection'", ymin="low_lmstd", ymax="high_lmstd"),
             width=0.08,
             size=0.4,
+            alpha=0.6,
         )
+        + geom_point(aes(colour="agent_full"), size=6, stroke=0.1)
+        + geom_point(aes(x="agent_full", y="last_mean", colour="'Last Sample'"), size=3, stroke=0.1, shape="s")
         + theme(
             axis_title=element_text(size=15),
             axis_text=element_text(size=8),
             figure_size=(12, 4),
         )
-        + scale_color_discrete(guide=False)
+        + scale_color_discrete(guide=guide_legend())
         + scale_x_discrete(guide=False)
         + ylab("Mean Best Test KL / Full KL")
-        + xlab("Number of samples")
+        + xlab("Method")
     )
 
     name = (
@@ -1644,7 +1650,7 @@ def plot_combined_ranked_ensemble_summary(
     create_tex_table(
         frame,
         "all",
-        name,
+        name + ("_ll" if is_log_likelihood else "_kl"),
     )
 
 
@@ -1745,7 +1751,7 @@ def create_combined_summary_plots(
         plot_summary(files, ids)
 
 
-def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None):
+def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]], results_folder="results", file_filter="results_vnn*", is_log_likelihood=False, allowed_data_ratios=None):
 
     global summary_select_agent_params
     summary_select_agent_params = {}
@@ -1758,7 +1764,7 @@ def create_ranked_vnn_plots(num_samples=100, summary_input_dims=[[10, 100, 1000]
         )
 
 
-def create_ranked_bbb_plots(num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None):
+def create_ranked_bbb_plots(num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_bbb*", is_log_likelihood=False, allowed_data_ratios=None):
 
     global summary_select_agent_params
     summary_select_agent_params = {}
@@ -1773,7 +1779,7 @@ def create_ranked_bbb_plots(num_samples=100, summary_input_dims=[[1, 10, 100, 10
 
 
 def create_ranked_dropout_plots(
-    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
+    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_dropout*", is_log_likelihood=False, allowed_data_ratios=None
 ):
 
     global summary_select_agent_params
@@ -1789,7 +1795,7 @@ def create_ranked_dropout_plots(
 
 
 def create_ranked_hypermodel_plots(
-    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
+    num_samples=100, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_hypermodel*", is_log_likelihood=False, allowed_data_ratios=None
 ):
 
     global summary_select_agent_params
@@ -1804,7 +1810,7 @@ def create_ranked_hypermodel_plots(
         )
 
 def create_ranked_ensemble_plots(
-    num_samples=30, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
+    num_samples=30, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_ensemble*", is_log_likelihood=False, allowed_data_ratios=None
 ):
 
     global summary_select_agent_params
@@ -1819,7 +1825,7 @@ def create_ranked_ensemble_plots(
         )
 
 def create_ranked_layer_ensembles_plots(
-    num_samples=125, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_*", is_log_likelihood=False, allowed_data_ratios=None
+    num_samples=125, summary_input_dims=[[1, 10, 100, 1000]], results_folder="results", file_filter="results_layer_ensembles*", is_log_likelihood=False, allowed_data_ratios=None
 ):
 
     global summary_select_agent_params
