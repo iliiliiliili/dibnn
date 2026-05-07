@@ -69,7 +69,7 @@ int_fields = [
     "num_index_samples",
     "indexer",
     # "num_batches",
-    "training_steps",
+    "training_epochs",
 ]
 int_list_fields = [
     "num_ensembles",
@@ -257,7 +257,7 @@ summary_select_agent_params = {
         #     "num_layers": [2],
         #     "hidden_size": [50],
         #     "num_ensemble": [10],
-        #     "training_steps": [1000],
+        #     "training_epochs": [1000],
         # },
         {
             "agent_suffix": "_30",
@@ -266,7 +266,7 @@ summary_select_agent_params = {
             "num_layers": [2],
             "hidden_size": [50],
             "num_ensemble": [30],
-            "training_steps": [1000],
+            "training_epochs": [1000],
         },
     ],
     "dropout": [
@@ -304,7 +304,7 @@ summary_select_agent_params = {
             "num_layers": [3],
             "hidden_size": [100],
             "num_index_samples": [100],
-            "training_steps": [-1],
+            "training_epochs": [-1],
         },
     ],
     "layer_ensembles": [
@@ -391,7 +391,7 @@ def make_vnn_ranked_params(num_samples, use_ranked):
                     "num_layers": [3],
                     "hidden_size": [100],
                     "num_index_samples": [100],
-                    "training_steps": [-1],
+                    "training_epochs": [-1],
                     "max_num_samples": [max_num_samples],
                     "indexer": [indexer],
                 }
@@ -521,7 +521,7 @@ def make_ensemble_ranked_params(num_samples, use_ranked):
                     "num_layers": [2],
                     "hidden_size": [50],
                     "num_ensemble": [10, 30],
-                    "training_steps": [1000],
+                    "training_epochs": [1000],
                     "max_num_samples": [max_num_samples],
                     "indexer": [indexer],
                 }

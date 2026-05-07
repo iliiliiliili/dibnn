@@ -40,6 +40,10 @@ def main(
     device="cuda:0",
     results_folder="results",
     use_double_precision=False,
+    early_stopping_patience=0,
+    early_stopping_mode="loss",
+    early_stopping_min_delta=0.0,
+    early_stopping_eval_freq=None,
 ):
     """Run testbed sweep.
 
@@ -109,12 +113,25 @@ def main(
 
                     train_seed, all_indices_seed, best_samples_seed = split_seed(agent_seed, 3)
 
+                    def _val_kl_fn(enn_sampler, eval_seed):
+                        return problem.evaluate_quality_val(
+                            enn_sampler,
+                            seed=eval_seed,
+                            device=device,
+                        ).kl_estimate
+
                     # Train
                     enn_sampler = agent(
                         problem.train_data,
                         train_seed,
                         problem.prior_knowledge,
                         device=device,
+                        val_data=problem.val_data,
+                        val_kl_fn=_val_kl_fn,
+                        early_stopping_patience=early_stopping_patience,
+                        early_stopping_mode=early_stopping_mode,
+                        early_stopping_min_delta=early_stopping_min_delta,
+                        early_stopping_eval_freq=early_stopping_eval_freq,
                     )
 
                     if agent_config.settings["agent"] in ["layer_ensembles", "ensemble"]:

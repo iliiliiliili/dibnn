@@ -194,21 +194,32 @@ def make_batch_iterator(
         drop_last=False
     )
 
-    # Create infinite iterator
-    def infinite_iterator():
-        while True:
-            for batch_data in dataloader:
-                x_batch, y_batch, idx_batch, w_batch = batch_data
-                yield base.Batch(
-                    x=x_batch,
-                    y=y_batch,
-                    data_index=idx_batch,
-                    weights=w_batch,
-                    extra=data.extra,
-                )
+    # Create iterator
+    def iterator():
+        for batch_data in dataloader:
+            x_batch, y_batch, idx_batch, w_batch = batch_data
+            yield base.Batch(
+                x=x_batch,
+                y=y_batch,
+                data_index=idx_batch,
+                weights=w_batch,
+                extra=data.extra,
+            )
 
-    return infinite_iterator()
+    # # Create infinite iterator
+    # def infinite_iterator():
+    #     while True:
+    #         for batch_data in dataloader:
+    #             x_batch, y_batch, idx_batch, w_batch = batch_data
+    #             yield base.Batch(
+    #                 x=x_batch,
+    #                 y=y_batch,
+    #                 data_index=idx_batch,
+    #                 weights=w_batch,
+    #                 extra=data.extra,
+    #             )
 
+    return iterator
 
 def make_test_data(n_samples: int = 20) -> base.BatchIterator:
     """Generate a simple dataset suitable for classification or regression."""

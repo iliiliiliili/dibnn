@@ -522,9 +522,9 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
 
         jax_loss_metrics = {"loss": -2605.0}
 
-        # self.torch_config.training_steps = 200
+        # self.torch_config.training_epochs = 200
 
-        while steps < self.torch_config.training_steps:
+        while steps < self.torch_config.training_epochs:
         # for steps in range(jax_num_batches):
             torch_batch = next(torch_dataset)
             jax_batch = next(jax_dataset)
@@ -576,18 +576,18 @@ class JaxAndTorchVanillaEnnAgent(testbed_base.TestbedAgent):
             
             # compare_jax_and_torch_ensemble_weights(jax_state.params, jax_enn.prior_params, torch_model, device, self.use_double_precision)
             # print(
-            #     f"Step {steps}/{self.torch_config.training_steps}, Torch Loss: {torch_loss.item():.4f}, Jax Loss: {jax_loss_metrics['loss']:.4f}"
+            #     f"Step {steps}/{self.torch_config.training_epochs}, Torch Loss: {torch_loss.item():.4f}, Jax Loss: {jax_loss_metrics['loss']:.4f}"
             # )
             # print(end="")
 
 
             if (
                 (steps)
-                % logging_freq(self.torch_config.training_steps, self.torch_config.train_log_freq)
+                % logging_freq(self.torch_config.training_epochs, self.torch_config.train_log_freq)
                 == 0
             ) and (logging != "none"):
                 print(
-                    f"Step {steps}/{self.torch_config.training_steps}, Torch Loss: {torch_loss.item():.4f}, Jax Loss: {jax_loss_metrics['loss']:.4f}"
+                    f"Step {steps}/{self.torch_config.training_epochs}, Torch Loss: {torch_loss.item():.4f}, Jax Loss: {jax_loss_metrics['loss']:.4f}"
                 )
             # if (
             #     (steps)

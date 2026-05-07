@@ -173,6 +173,11 @@ class TestbedGPRegression(TestbedProblem):
         return self.data_sampler.train_data
 
     @property
+    def val_data(self) -> Data:
+        # Use the posterior mean as the deterministic regression target on validation inputs.
+        return Data(self.data_sampler.x_val, self.data_sampler.val_mean)
+
+    @property
     def prior_knowledge(self) -> PriorKnowledge:
         return self.prior
 
@@ -226,6 +231,8 @@ class TestbedGPRegression(TestbedProblem):
         device: str = "cuda:0",
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
+        num_samples = self.num_enn_samples if num_samples is None else num_samples
+
         x_val = self.data_sampler.x_val.to(device)
         num_val = x_val.shape[0]
         posterior_mean = self.data_sampler.val_mean[:, 0].to(device)
