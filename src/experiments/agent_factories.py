@@ -35,8 +35,6 @@ ConfigCtor = Callable[[], agents.VanillaEnnConfig]
 class AgentCtorConfig:
     settings: Dict[str, Any]  # Hyperparameters to work out which agent it is
     config_ctor: ConfigCtor  # Constructor for the agent config.
-
-
 # def make_ensemble_agent(
 #     num_ensemble: int = 5,
 #     hidden_sizes: Sequence[int] = (50, 50),
@@ -77,6 +75,10 @@ def make_dropout_ctor(
     learning_rate: float = 1e-3,
     training_epochs: Optional[int] = None,
     batch_size: Optional[int] = None,
+    early_stopping_patience: int = 5,
+    early_stopping_mode: str = "loss",
+    early_stopping_min_delta: float = 0.0,
+    early_stopping_eval_freq: Optional[int] = 5,
 ) -> testbed_base.TestbedAgent:
     """Factory for creating a dropout-based agent."""
 
@@ -106,6 +108,10 @@ def make_dropout_ctor(
             optimizer_ctor=optimizer_ctor,
             training_epochs=training_epochs,
             batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_mode=early_stopping_mode,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_eval_freq=early_stopping_eval_freq,
         )
 
         return config
@@ -121,6 +127,10 @@ def make_bbb_ctor(
     num_index_samples: int = 64,
     training_epochs: Optional[int] = None,
     batch_size: Optional[int] = None,
+    early_stopping_patience: int = 5,
+    early_stopping_mode: str = "loss",
+    early_stopping_min_delta: float = 0.0,
+    early_stopping_eval_freq: Optional[int] = 5,
 ) -> ConfigCtor:
     """Generate an ensemble agent config."""
 
@@ -146,6 +156,10 @@ def make_bbb_ctor(
             optimizer_ctor=optimizer_ctor,
             training_epochs=training_epochs,
             batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_mode=early_stopping_mode,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_eval_freq=early_stopping_eval_freq,
         )
 
         return config
@@ -163,6 +177,10 @@ def make_hypermodel_ctor(
     training_epochs: Optional[int] = None,
     batch_size: Optional[int] = None,
     learning_rate: float = 1e-3,
+    early_stopping_patience: int = 5,
+    early_stopping_mode: str = "loss",
+    early_stopping_min_delta: float = 0.0,
+    early_stopping_eval_freq: Optional[int] = 5,
 ) -> ConfigCtor:
     """Generate an ensemble agent config."""
 
@@ -189,6 +207,10 @@ def make_hypermodel_ctor(
             optimizer_ctor=optimizer_ctor,
             training_epochs=training_epochs,
             batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_mode=early_stopping_mode,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_eval_freq=early_stopping_eval_freq,
         )
 
         return config
@@ -205,6 +227,10 @@ def make_ensemble_ctor(
     num_layers: int = 2,
     training_epochs: Optional[int] = None,
     batch_size: Optional[int] = None,
+    early_stopping_patience: int = 5,
+    early_stopping_mode: str = "loss",
+    early_stopping_min_delta: float = 0.0,
+    early_stopping_eval_freq: Optional[int] = 5,
 ) -> ConfigCtor:
     """Generate an ensemble agent config."""
 
@@ -231,6 +257,10 @@ def make_ensemble_ctor(
             optimizer_ctor=optimizer_ctor,
             training_epochs=training_epochs,
             batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_mode=early_stopping_mode,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_eval_freq=early_stopping_eval_freq,
         )
 
         return config
@@ -273,6 +303,10 @@ def make_vnn_ctor(
     loss_function: str = "gaussian",
     noise_scale: float = 1,
     batch_size: Optional[int] = None,
+    early_stopping_patience: int = 5,
+    early_stopping_mode: str = "loss",
+    early_stopping_min_delta: float = 0.0,
+    early_stopping_eval_freq: Optional[int] = 5,
 ) -> ConfigCtor:
     """Generate a dropout agent config."""
 
@@ -326,6 +360,10 @@ def make_vnn_ctor(
             optimizer_ctor=optimizer_ctor,
             training_epochs=training_epochs,
             batch_size=batch_size,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_mode=early_stopping_mode,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_eval_freq=early_stopping_eval_freq,
         )
 
     return make_agent_config
@@ -341,6 +379,10 @@ def make_layer_ensembles_ctor(
     inference_samples: List[int] = ["full"],
     training_epochs: Optional[int] = None,
     batch_size: Optional[int] = None,
+    early_stopping_patience: int = 5,
+    early_stopping_mode: str = "loss",
+    early_stopping_min_delta: float = 0.0,
+    early_stopping_eval_freq: Optional[int] = 5,
 ) -> ConfigCtor:
     """Generate an ensemble agent config."""
 
@@ -376,6 +418,10 @@ def make_layer_ensembles_ctor(
             batch_size=batch_size,
             inference_samples=inference_samples,
             max_num_samples=num_samples,
+            early_stopping_patience=early_stopping_patience,
+            early_stopping_mode=early_stopping_mode,
+            early_stopping_min_delta=early_stopping_min_delta,
+            early_stopping_eval_freq=early_stopping_eval_freq,
         )
 
         return config
@@ -760,46 +806,49 @@ def make_vnn_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
                             for global_std_mode in ["multiply"]:
                                 for num_index_samples in [100]:
                                     for training_epochs in [500]:
-                                        batch_norm_mode = activation_mode
+                                        for early_stopping_mode in ["loss", "kl"]:
+                                            batch_norm_mode = activation_mode
 
-                                        current_activation = {
-                                            "relu": torch.nn.ReLU(),
-                                            "tanh": torch.nn.Tanh(),
-                                            "lrelu": torch.nn.LeakyReLU(),
-                                        }[activation]
+                                            current_activation = {
+                                                "relu": torch.nn.ReLU(),
+                                                "tanh": torch.nn.Tanh(),
+                                                "lrelu": torch.nn.LeakyReLU(),
+                                            }[activation]
 
-                                        if len(activation_mode.split("+")) > 1:
-                                            current_activation = [
-                                                current_activation
-                                            ] * len(activation_mode.split("+"))
+                                            if len(activation_mode.split("+")) > 1:
+                                                current_activation = [
+                                                    current_activation
+                                                ] * len(activation_mode.split("+"))
 
-                                        settings = {
-                                            "agent": "vnn",
-                                            "activation": activation,
-                                            "learning_rate": learning_rate,
-                                            "num_layers": num_layers,
-                                            "hidden_size": hidden_size,
-                                            "activation_mode": activation_mode,
-                                            "batch_norm_mode": batch_norm_mode,
-                                            "use_batch_norm": use_batch_norm,
-                                            "global_std_mode": global_std_mode,
-                                            "training_epochs": training_epochs,
-                                            "num_index_samples": num_index_samples,
-                                        }
-                                        config_ctor = make_vnn_ctor(
-                                            current_activation,
-                                            activation_mode,
-                                            use_batch_norm,
-                                            batch_norm_mode,
-                                            global_std_mode,
-                                            num_index_samples,
-                                            hidden_size,
-                                            training_epochs=training_epochs,
-                                            batch_size=1000 if reduce_batch else None,
-                                        )
-                                        sweep.append(
-                                            AgentCtorConfig(settings, config_ctor)
-                                        )
+                                            settings = {
+                                                "agent": "vnn",
+                                                "activation": activation,
+                                                "learning_rate": learning_rate,
+                                                "num_layers": num_layers,
+                                                "hidden_size": hidden_size,
+                                                "activation_mode": activation_mode,
+                                                "batch_norm_mode": batch_norm_mode,
+                                                "use_batch_norm": use_batch_norm,
+                                                "global_std_mode": global_std_mode,
+                                                "training_epochs": training_epochs,
+                                                "num_index_samples": num_index_samples,
+                                                "early_stopping_mode": early_stopping_mode,
+                                            }
+                                            config_ctor = make_vnn_ctor(
+                                                current_activation,
+                                                activation_mode,
+                                                use_batch_norm,
+                                                batch_norm_mode,
+                                                global_std_mode,
+                                                num_index_samples,
+                                                hidden_size,
+                                                training_epochs=training_epochs,
+                                                batch_size=1000 if reduce_batch else None,
+                                                early_stopping_mode=early_stopping_mode,
+                                            )
+                                            sweep.append(
+                                                AgentCtorConfig(settings, config_ctor)
+                                            )
 
     return sweep
 

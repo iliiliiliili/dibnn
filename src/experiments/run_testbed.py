@@ -39,10 +39,6 @@ def main(
     device="cuda:0",
     results_folder="results",
     use_double_precision=False,
-    early_stopping_patience=10,
-    early_stopping_mode="loss",
-    early_stopping_min_delta=0.0,
-    early_stopping_eval_freq=1,
 ):
     """Run testbed sweep.
 
@@ -107,7 +103,7 @@ def main(
                     # Form the appropriate agent for training
                     agent = agents.VanillaEnnAgent(agent_config.config_ctor(), use_double_precision=use_double_precision)
 
-                    train_seed, evaluation_seed, _ = split_seed(agent_seed, 3)
+                    train_seed, evaluation_seed = split_seed(agent_seed, 2)
 
                     # Train
                     enn_sampler = agent(
@@ -116,10 +112,6 @@ def main(
                         problem.prior_knowledge,
                         device=device,
                         val_data=problem.val_data,
-                        early_stopping_patience=early_stopping_patience,
-                        early_stopping_mode=early_stopping_mode,
-                        early_stopping_min_delta=early_stopping_min_delta,
-                        early_stopping_eval_freq=early_stopping_eval_freq,
                         evaluate_quality_val_fn=problem.evaluate_quality_val,
                     )
 

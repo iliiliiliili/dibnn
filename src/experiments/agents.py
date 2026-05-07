@@ -55,6 +55,10 @@ class VanillaEnnConfig:
     train_num_samples: Optional[int] = None
     batched_inference: Optional[bool] = False
     max_num_samples: Optional[int] = None
+    early_stopping_patience: int = 0
+    early_stopping_mode: str = "loss"
+    early_stopping_min_delta: float = 0.0
+    early_stopping_eval_freq: Optional[int] = None
 
     def __post_init__(self):
         if self.optimizer_ctor is None:
@@ -140,7 +144,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
             elif early_stopping_mode == "kl":
 
                 val_sampler = extract_enn_sampler(model, enn, device)
-                kl_quality = evaluate_quality_val_fn(val_sampler, eval_seed)
+                kl_quality = evaluate_quality_val_fn(val_sampler, eval_seed, device=device)
 
                 return kl_quality.kl_estimate
             else: 
@@ -155,11 +159,11 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         device: str = "cuda:0",
         logging: str = "default",
         val_data: Optional[testbed_base.Data] = None,
-        early_stopping_patience: int = 5,
-        early_stopping_mode: str = "loss",
-        early_stopping_min_delta: float = 0.0,
-        early_stopping_eval_freq: Optional[int] = 100,
-        evaluate_quality_val_fn: Optional[Callable[[testbed_base.EpistemicSampler, int], testbed_base.ENNQuality]] = None,
+        early_stopping_patience: Optional[int] = None,
+        early_stopping_mode: Optional[str] = None,
+        early_stopping_min_delta: Optional[float] = None,
+        early_stopping_eval_freq: Optional[int] = None,
+        evaluate_quality_val_fn: Optional[Callable[[testbed_base.EpistemicSampler, int, str], testbed_base.ENNQuality]] = None,
     ) -> testbed_base.EpistemicSampler:
         """Wraps an ENN as a testbed agent, using sensible loss/bootstrapping."""
         # Create the ENN
@@ -192,6 +196,15 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
         # Training loop
         model.train()
+
+        if early_stopping_patience is None:
+            early_stopping_patience = self.config.early_stopping_patience
+        if early_stopping_mode is None:
+            early_stopping_mode = self.config.early_stopping_mode
+        if early_stopping_min_delta is None:
+            early_stopping_min_delta = self.config.early_stopping_min_delta
+        if early_stopping_eval_freq is None:
+            early_stopping_eval_freq = self.config.early_stopping_eval_freq
 
         use_early_stopping = early_stopping_patience is not None and early_stopping_patience > 0
         if use_early_stopping:

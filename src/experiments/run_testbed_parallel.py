@@ -27,6 +27,7 @@ import os
 from multiprocessing import Pool
 import random
 from src.utils import read_results_file
+from src import torch_repr
 
 
 def single_run(
@@ -41,10 +42,6 @@ def single_run(
     results_file,
     use_double_precision,
     reduce_batch,
-    early_stopping_patience,
-    early_stopping_mode,
-    early_stopping_min_delta,
-    early_stopping_eval_freq,
     device,
 ):
 
@@ -71,13 +68,6 @@ def single_run(
 
     train_seed, evaluation_seed, _ = split_seed(agent_seed, 3)
 
-    def _val_kl_fn(enn_sampler, eval_seed):
-        return problem.evaluate_quality_val(
-            enn_sampler,
-            seed=eval_seed,
-            device=device,
-        ).kl_estimate
-
     # Train
     enn_sampler = agent(
         problem.train_data,
@@ -86,10 +76,6 @@ def single_run(
         device=device,
         logging="none",
         val_data=problem.val_data,
-        early_stopping_patience=early_stopping_patience,
-        early_stopping_mode=early_stopping_mode,
-        early_stopping_min_delta=early_stopping_min_delta,
-        early_stopping_eval_freq=early_stopping_eval_freq,
         evaluate_quality_val_fn=problem.evaluate_quality_val,
     )
 
@@ -321,10 +307,6 @@ def main(
     results_folder="results",
     use_double_precision=False,
     reduce_batch_dims=[],
-    early_stopping_patience=0,
-    early_stopping_mode="loss",
-    early_stopping_min_delta=0.0,
-    early_stopping_eval_freq=None,
 ):
     """Run testbed sweep.
 
@@ -420,10 +402,6 @@ def main(
                             results_file,
                             use_double_precision,
                             reduce_batch,
-                            early_stopping_patience,
-                            early_stopping_mode,
-                            early_stopping_min_delta,
-                            early_stopping_eval_freq,
                         )
 
                         if os.path.exists(results_file):
