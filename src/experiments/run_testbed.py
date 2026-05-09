@@ -155,6 +155,9 @@ def main(
                             + "std_error="
                             + str(kl_quality.extra["std_error"])
                             + " "
+                            + "best_epoch="
+                            + str(agent.best_epoch)
+                            + " "
                             + " ".join(
                                 [
                                     str(k) + "=" + str(v)

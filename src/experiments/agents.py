@@ -115,6 +115,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
     config: VanillaEnnConfig
     use_double_precision: bool = True
     fixed_sampler: bool = False
+    best_epoch: Optional[int] = None
 
     def _evaluate_validation_metric(
         self,
@@ -303,6 +304,9 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
         if use_early_stopping and best_state_dict is not None:
             model.load_state_dict(best_state_dict)
+            self.best_epoch = best_epoch
+        else:
+            self.best_epoch = self.config.training_epochs - 1
 
         model.eval()
 

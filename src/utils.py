@@ -52,6 +52,7 @@ int_fields = [
     "index_dim",
     "num_index_samples",
     "indexer",
+    "best_epoch",
     # "num_batches",
 ]
 int_list_fields = [

@@ -111,6 +111,9 @@ def single_run(
             + "std_error="
             + str(kl_quality.extra["std_error"])
             + " "
+            + "best_epoch="
+            + str(agent.best_epoch)
+            + " "
             + " ".join(
                 [
                     str(k) + "=" + str(v)
@@ -246,6 +249,7 @@ def combine_results(
                         kls = []
                         mean_errors = []
                         std_errors = []
+                        best_epochs = []
 
                         result_agent_name = list(agent_results[0].keys())[0]
 
@@ -253,6 +257,7 @@ def combine_results(
                             kls.extend(result[result_agent_name]["kl"])
                             mean_errors.extend(result[result_agent_name]["mean_error"])
                             std_errors.extend(result[result_agent_name]["std_error"])
+                            best_epochs.extend(result[result_agent_name].get("best_epoch", []))
 
                         agent_settings = agent_factories.load_agent_config(
                             agent_id, agent_name
@@ -264,6 +269,7 @@ def combine_results(
                         ) / len(kls)
                         mean_error = sum([me for me in mean_errors]) / len(mean_errors)
                         std_error = sum([se for se in std_errors]) / len(std_errors)
+                        best_epoch_mean = int(round(sum(best_epochs) / len(best_epochs))) if best_epochs else None
 
                         combined_file.write(
                             str(agent_id)
@@ -278,6 +284,7 @@ def combine_results(
                             + " "
                             + "std_error="
                             + str(std_error)
+                            + (" best_epoch=" + str(best_epoch_mean) if best_epoch_mean is not None else "")
                             + " "
                             + " ".join(
                                 [
