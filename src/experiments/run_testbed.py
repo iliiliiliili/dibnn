@@ -106,7 +106,7 @@ def main(
                     train_seed, evaluation_seed = split_seed(agent_seed, 2)
 
                     # Train
-                    enn_sampler = agent(
+                    enn_sampler, val_loss, val_kl = agent(
                         problem.train_data,
                         train_seed,
                         problem.prior_knowledge,
@@ -148,6 +148,12 @@ def main(
                             str(agent_id)
                             + " "
                             + str(kl_quality.kl_estimate)
+                            + " "
+                            + "val_loss="
+                            + str(val_loss)
+                            + " "
+                            + "val_kl="
+                            + str(val_kl)
                             + " "
                             + "mean_error="
                             + str(kl_quality.extra["mean_error"])

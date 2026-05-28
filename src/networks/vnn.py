@@ -15,6 +15,7 @@
 # limitations under the License.
 # ============================================================================
 """Implementing Dropout as an ENN in PyTorch."""
+
 import math
 from typing import Any, Callable, List, Literal, Optional, Sequence, Tuple, Union
 
@@ -26,6 +27,7 @@ import torch.nn as nn
 
 import torch.nn.init as init
 
+
 def create_initializer(names):
     result = []
 
@@ -33,11 +35,19 @@ def create_initializer(names):
         if name is None:
             result.append((None, None))
         elif name == "he_uniform":
-            result.append((lambda t: init.kaiming_uniform_(t, a=0, mode='fan_in'), 
-                          lambda t: init.kaiming_uniform_(t, a=0, mode='fan_in')))
+            result.append(
+                (
+                    lambda t: init.kaiming_uniform_(t, a=0, mode="fan_in"),
+                    lambda t: init.kaiming_uniform_(t, a=0, mode="fan_in"),
+                )
+            )
         elif name == "he_normal":
-            result.append((lambda t: init.kaiming_normal_(t, a=0, mode='fan_in'), 
-                          lambda t: init.kaiming_normal_(t, a=0, mode='fan_in')))
+            result.append(
+                (
+                    lambda t: init.kaiming_normal_(t, a=0, mode="fan_in"),
+                    lambda t: init.kaiming_normal_(t, a=0, mode="fan_in"),
+                )
+            )
         elif name == "glorot_normal":
             result.append((init.xavier_normal_, init.xavier_normal_))
         elif name == "glorot_uniform":
@@ -107,7 +117,7 @@ class VariationalBase(nn.Module):
         self.batch_norm_momentum = batch_norm_momentum
         self.global_std_mode = global_std_mode
 
-    def __call__(self, x, index, global_std=2):
+    def __call__(self, x, index, global_std=0.2):
 
         end_activation = None
         end_batch_norm = None
@@ -168,10 +178,8 @@ class VariationalBase(nn.Module):
                 elif target == "std":
                     if stds is not None:
                         stds = torch.nn.Sequential(
-                            [
-                                stds,
-                                current_activation,
-                            ]
+                            stds,
+                            current_activation,
                         )
                 elif target == "end":
                     end_activation = current_activation
@@ -192,9 +200,10 @@ class VariationalBase(nn.Module):
         elif self.global_std_mode == "multiply":
             std_values = global_std * std_values
 
-        if len(std_values.shape) == 2:
-            std_values = std_values.unsqueeze(0)
+        if len(mean_values.shape) == 2:
             mean_values = mean_values.unsqueeze(0)
+        if hasattr(std_values, "shape") and len(std_values.shape) == 2:
+            std_values = std_values.unsqueeze(0)
 
         result = mean_values + std_values * index.unsqueeze(1)
 
@@ -274,8 +283,11 @@ class VariationalLinear(VariationalBase):
         )
 
         initializers_mean[0](means.weight) if initializers_mean[0] is not None else None
-        initializers_mean[1](means.bias) if bias and initializers_mean[1] is not None else None
-
+        (
+            initializers_mean[1](means.bias)
+            if bias and initializers_mean[1] is not None
+            else None
+        )
 
         if global_std_mode == "replace":
             stds = None
@@ -287,8 +299,16 @@ class VariationalLinear(VariationalBase):
                 **kwargs,
             )
 
-            initializers_std[0](means.weight) if initializers_std[0] is not None else None
-            initializers_std[1](means.bias) if bias and initializers_std[1] is not None else None
+            (
+                initializers_std[0](means.weight)
+                if initializers_std[0] is not None
+                else None
+            )
+            (
+                initializers_std[1](means.bias)
+                if bias and initializers_std[1] is not None
+                else None
+            )
 
         super().build(
             means,
@@ -303,6 +323,7 @@ class VariationalLinear(VariationalBase):
             batch_norm_momentum=batch_norm_momentum,
             global_std_mode=global_std_mode,
         )
+
 
 class MLPVariationalENN(base.EpistemicNetwork):
 
@@ -383,12 +404,11 @@ class MLPVariationalENN(base.EpistemicNetwork):
                 for output_size in output_sizes[1:]:
                     indices.append(full_index[:, i : i + output_size])
                     i += output_size
-                
+
                 for layer, index in zip(self.layers, indices):
                     x = layer(x, index)
 
                 return x
-
 
         index_dim = sum(output_sizes)
         indexer = indexers.ScaledGaussianIndexer(

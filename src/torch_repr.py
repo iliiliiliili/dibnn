@@ -20,3 +20,4 @@ def custom_repr(self):
 original_repr = torch.Tensor.__repr__
 torch.Tensor.__repr__ = custom_repr
 torch.Tensor.__str__ = original_repr
+torch.Tensor.orepr = lambda self: print(original_repr(self))

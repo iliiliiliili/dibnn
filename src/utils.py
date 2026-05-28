@@ -40,6 +40,7 @@ float_fields = [
     "regularization_scale",
     "sigma_0",
     "learning_rate",
+    "val_loss",
     "mean_error",
     "std_error",
     "val_kl",

@@ -22,5 +22,5 @@ tex/*
 screenlog.*
 results
 single_runs
-datasets
+datasets*
 *.log

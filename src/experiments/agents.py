@@ -127,11 +127,11 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         evaluate_quality_val_fn: Optional[Callable[[testbed_base.EpistemicSampler, int], testbed_base.ENNQuality]],
         eval_seed: int,
         device: str,
-        early_stopping_mode: str,
+        metric: str,
     ) -> float:
         """Evaluate validation metric used by early stopping."""
         with torch.no_grad():
-            if early_stopping_mode == "loss":
+            if metric == "loss":
 
                 total_loss = 0
                 total_batches = 0
@@ -142,14 +142,14 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                     total_batches += 1
 
                 return total_loss / total_batches
-            elif early_stopping_mode == "kl":
+            elif metric == "kl":
 
                 val_sampler = extract_enn_sampler(model, enn, device)
                 kl_quality = evaluate_quality_val_fn(val_sampler, eval_seed, device=device)
 
                 return kl_quality.kl_estimate
             else: 
-                raise ValueError(f"Invalid early_stopping_mode: {early_stopping_mode}")
+                raise ValueError(f"Invalid early_stopping_mode: {metric}")
 
 
     def __call__(
@@ -241,7 +241,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
         for epoch in range(self.config.training_epochs):
 
-            for batch in dataset_iterator_creator():
+            for i, batch in enumerate(dataset_iterator_creator()):
 
                 # Compute loss
                 train_seed, run_seed = split_seed(train_seed, 2)
@@ -251,6 +251,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                # print(f"Epoch {epoch}, Batch {i}, Loss: {loss.item():.4f}", end="\r")
 
             if use_early_stopping and ((epoch % early_stopping_eval_freq == 0) or (epoch >= self.config.training_epochs - 1)):
                 early_stopping_seed, eval_seed = split_seed(early_stopping_seed, 2)
@@ -262,7 +263,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                     evaluate_quality_val_fn=evaluate_quality_val_fn,
                     eval_seed=eval_seed,
                     device=device,
-                    early_stopping_mode=early_stopping_mode,
+                    metric=early_stopping_mode,
                 )
 
                 improved = monitored_value < (best_metric - early_stopping_min_delta)
@@ -310,10 +311,31 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
         model.eval()
 
-        if self.fixed_sampler:
-            return extract_fixed_enn_sampler(model, enn, device)
-        else:
-            return extract_enn_sampler(model, enn, device)
+        sampler = extract_fixed_enn_sampler(model, enn, device) if self.fixed_sampler else extract_enn_sampler(model, enn, device)
+
+        val_loss = self._evaluate_validation_metric(
+            enn=enn,
+            model=model,
+            loss_fn=loss_fn,
+            val_dataset_iterator_creator=val_dataset_iterator_creator,
+            evaluate_quality_val_fn=evaluate_quality_val_fn,
+            eval_seed=eval_seed,
+            device=device,
+            metric="loss",
+        )
+
+        val_kl = self._evaluate_validation_metric(
+            enn=enn,
+            model=model,
+            loss_fn=loss_fn,
+            val_dataset_iterator_creator=val_dataset_iterator_creator,
+            evaluate_quality_val_fn=evaluate_quality_val_fn,
+            eval_seed=eval_seed,
+            device=device,
+            metric="kl",
+        )
+
+        return sampler, val_loss, val_kl
 
     def create_all_indices(
         self,

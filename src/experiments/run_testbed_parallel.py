@@ -18,6 +18,7 @@
 
 from typing import List
 import fire
+from tqdm import tqdm
 
 from src.experiments import agent_factories
 from src.experiments import agents
@@ -69,7 +70,7 @@ def single_run(
     train_seed, evaluation_seed, _ = split_seed(agent_seed, 3)
 
     # Train
-    enn_sampler = agent(
+    enn_sampler, val_loss, val_kl = agent(
         problem.train_data,
         train_seed,
         problem.prior_knowledge,
@@ -84,7 +85,7 @@ def single_run(
         enn_sampler, seed=evaluation_seed, device=device
     )
 
-    print("#", end="")
+    print("#", end="", flush=True)
 
     # print(
     #     f"kl_estimate={kl_quality.kl_estimate}"
@@ -104,6 +105,12 @@ def single_run(
             str(agent_id)
             + " "
             + str(kl_quality.kl_estimate)
+            + " "
+            + "val_loss="
+            + str(val_loss)
+            + " "
+            + "val_kl="
+            + str(val_kl)
             + " "
             + "mean_error="
             + str(kl_quality.extra["mean_error"])
@@ -198,109 +205,124 @@ def combine_results(
     results_folder: str,
 ):
     """Combine results from multiple runs into single files."""
-    for ind in input_dims:
-        for dr in data_ratios:
-            for ns in noise_stds:
-                single_result_folder = (
-                    f"{results_folder}/{agent_name}/results_"
-                    + experiment_group
-                    + ("_" if len(experiment_group) > 0 else "")
-                    + agent_name
-                    + "_id"
-                    + str(ind)
-                    + "dr"
-                    + str(dr)
-                    + "ns"
-                    + str(ns)
-                )
-                combined_filepath = (
-                    f"{results_folder}/results_"
-                    + experiment_group
-                    + ("_" if len(experiment_group) > 0 else "")
-                    + agent_name
-                    + "_id"
-                    + str(ind)
-                    + "dr"
-                    + str(dr)
-                    + "ns"
-                    + str(ns)
-                    + ".txt"
-                )
+    total_combinations = (
+        len(input_dims)
+        * len(data_ratios)
+        * len(noise_stds)
+    )
+    with tqdm(total=total_combinations, desc="Combining results") as pbar:
+        for ind in input_dims:
+            for dr in data_ratios:
+                for ns in noise_stds:
+                    single_result_folder = (
+                        f"{results_folder}/{agent_name}/results_"
+                        + experiment_group
+                        + ("_" if len(experiment_group) > 0 else "")
+                        + agent_name
+                        + "_id"
+                        + str(ind)
+                        + "dr"
+                        + str(dr)
+                        + "ns"
+                        + str(ns)
+                    )
+                    combined_filepath = (
+                        f"{results_folder}/results_"
+                        + experiment_group
+                        + ("_" if len(experiment_group) > 0 else "")
+                        + agent_name
+                        + "_id"
+                        + str(ind)
+                        + "dr"
+                        + str(dr)
+                        + "ns"
+                        + str(ns)
+                        + ".txt"
+                    )
 
-                with open(combined_filepath, "w") as combined_file:
-                    for agent_id in range(agent_id_start, agent_id_end):
+                    with open(combined_filepath, "w") as combined_file:
+                        for agent_id in range(agent_id_start, agent_id_end):
 
-                        agent_results = []
+                            agent_results = []
 
-                        for seed in seeds:
-                            agent_filepath = (
-                                single_result_folder
-                                + "/agentid"
-                                + str(agent_id)
-                                + "_seed"
-                                + str(seed)
-                                + ".txt"
+                            for seed in seeds:
+                                agent_filepath = (
+                                    single_result_folder
+                                    + "/agentid"
+                                    + str(agent_id)
+                                    + "_seed"
+                                    + str(seed)
+                                    + ".txt"
+                                )
+
+                                result = read_results_file(agent_filepath)
+
+                                agent_results.append(result)
+
+                            kls = []
+                            val_losses = []
+                            val_kls = []
+                            mean_errors = []
+                            std_errors = []
+                            best_epochs = []
+
+                            result_agent_name = list(agent_results[0].keys())[0]
+
+                            for result in agent_results:
+                                kls.extend(result[result_agent_name]["kl"])
+                                val_losses.extend(result[result_agent_name]["val_loss"])
+                                val_kls.extend(result[result_agent_name]["val_kl"])
+                                mean_errors.extend(result[result_agent_name]["mean_error"])
+                                std_errors.extend(result[result_agent_name]["std_error"])
+                                best_epochs.extend(result[result_agent_name]["best_epoch"])
+
+                            agent_settings = agent_factories.load_agent_config(
+                                agent_id, agent_name
+                            ).settings
+
+                            kl_mean = sum([kl_quality for kl_quality in kls]) / len(kls)
+                            kl_variance = sum(
+                                [(kl_quality - kl_mean) ** 2 for kl_quality in kls]
+                            ) / len(kls)
+                            mean_error = sum([me for me in mean_errors]) / len(mean_errors)
+                            std_error = sum([se for se in std_errors]) / len(std_errors)
+                            val_loss_mean = sum(val_losses) / len(val_losses) if val_losses else None
+                            val_kl_mean = sum(val_kls) / len(val_kls) if val_kls else None
+                            best_epoch_mean = int(round(sum(best_epochs) / len(best_epochs))) if best_epochs else None
+
+                            combined_file.write(
+                                str(agent_id)
+                                + " "
+                                + str(kl_mean)
+                                + " "
+                                + "kl_variance="
+                                + str(kl_variance)
+                                + " "
+                                + ("val_loss=" + str(val_loss_mean) + " " if val_loss_mean is not None else "")
+                                + ("val_kl=" + str(val_kl_mean) + " " if val_kl_mean is not None else "")
+                                + "mean_error="
+                                + str(mean_error)
+                                + " "
+                                + "std_error="
+                                + str(std_error)
+                                + (" best_epoch=" + str(best_epoch_mean) if best_epoch_mean is not None else "")
+                                + " "
+                                + " ".join(
+                                    [
+                                        str(k) + "=" + str(v)
+                                        for (
+                                            k,
+                                            v,
+                                        ) in agent_settings.items()
+                                    ]
+                                )
+                                + "\n"
                             )
-
-                            result = read_results_file(agent_filepath)
-
-                            agent_results.append(result)
-
-                        kls = []
-                        mean_errors = []
-                        std_errors = []
-                        best_epochs = []
-
-                        result_agent_name = list(agent_results[0].keys())[0]
-
-                        for result in agent_results:
-                            kls.extend(result[result_agent_name]["kl"])
-                            mean_errors.extend(result[result_agent_name]["mean_error"])
-                            std_errors.extend(result[result_agent_name]["std_error"])
-                            best_epochs.extend(result[result_agent_name].get("best_epoch", []))
-
-                        agent_settings = agent_factories.load_agent_config(
-                            agent_id, agent_name
-                        ).settings
-
-                        kl_mean = sum([kl_quality for kl_quality in kls]) / len(kls)
-                        kl_variance = sum(
-                            [(kl_quality - kl_mean) ** 2 for kl_quality in kls]
-                        ) / len(kls)
-                        mean_error = sum([me for me in mean_errors]) / len(mean_errors)
-                        std_error = sum([se for se in std_errors]) / len(std_errors)
-                        best_epoch_mean = int(round(sum(best_epochs) / len(best_epochs))) if best_epochs else None
-
-                        combined_file.write(
-                            str(agent_id)
-                            + " "
-                            + str(kl_mean)
-                            + " "
-                            + "kl_variance="
-                            + str(kl_variance)
-                            + " "
-                            + "mean_error="
-                            + str(mean_error)
-                            + " "
-                            + "std_error="
-                            + str(std_error)
-                            + (" best_epoch=" + str(best_epoch_mean) if best_epoch_mean is not None else "")
-                            + " "
-                            + " ".join(
-                                [
-                                    str(k) + "=" + str(v)
-                                    for (
-                                        k,
-                                        v,
-                                    ) in agent_settings.items()
-                                ]
-                            )
-                            + "\n"
-                        )
+                    pbar.update(1)
 
 
 def main(
-    input_dim=(1, 10, 100, 1000),
+    input_dim=(1, 10, 100),
     data_ratio=(1.0, 10.0, 100.0),
     noise_std=(0.01, 0.1, 1.0),
     seeds=(2605, 26, 0, 5),
@@ -424,6 +446,9 @@ def main(
         )
         print("Finished all runs")
 
+    else:
+        print("No experiments to run")
+
     max_agent_id = (
         agent_id_end
         if agent_id_end != -1
@@ -443,6 +468,8 @@ def main(
     )
 
     print("Combined results")
+
+
 
 
 if __name__ == "__main__":

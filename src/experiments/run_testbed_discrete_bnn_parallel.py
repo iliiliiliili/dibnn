@@ -19,6 +19,7 @@
 import random
 from typing import List
 import fire
+from tqdm import tqdm
 
 from src.experiments import agent_factories
 from src.experiments import agents
@@ -68,6 +69,9 @@ def single_run(
         train_seed,
         problem.prior_knowledge,
         device=device,
+        logging="none",
+        val_data=problem.val_data,
+        evaluate_quality_val_fn=problem.evaluate_quality_val,
     )
 
     if agent_config.settings["agent"] in ["layer_ensembles", "ensemble"]:
@@ -266,145 +270,163 @@ def combine_results(
     results_folder: str,
     no_file_ok: bool = False,
 ):
-    """Combine results from multiple runs into single files."""
-    for ind in input_dims:
-        for dr in data_ratios:
-            for ns in noise_stds:
-                for mns in max_num_samples:
-                    for val_type in ["kl", "ll"]:
-                        single_result_folder = (
-                            f"{results_folder}/{agent_name}/results_"
-                            + experiment_group
-                            + ("_" if len(experiment_group) > 0 else "")
-                            + agent_name
-                            + "_id"
-                            + str(ind)
-                            + "dr"
-                            + str(dr)
-                            + "ns"
-                            + str(ns)
-                        )
-                        combined_filepath = (
-                            f"{results_folder}/results_"
-                            + experiment_group
-                            + ("_" if len(experiment_group) > 0 else "")
-                            + agent_name
-                            + "_id"
-                            + str(ind)
-                            + "dr"
-                            + str(dr)
-                            + "ns"
-                            + str(ns)
-                            + "mns"
-                            + str(mns)
-                            + ("_" + val_type)
-                            + ".txt"
-                        )
+    total_combinations = (
+        len(input_dims)
+        * len(data_ratios)
+        * len(noise_stds)
+        * len(max_num_samples)
+        * 2
+    )
+    with tqdm(total=total_combinations, desc="Combining results") as pbar:
+        for ind in input_dims:
+            for dr in data_ratios:
+                for ns in noise_stds:
+                    for mns in max_num_samples:
+                        for val_type in ["kl", "ll"]:
+                            single_result_folder = (
+                                f"{results_folder}/{agent_name}/results_"
+                                + experiment_group
+                                + ("_" if len(experiment_group) > 0 else "")
+                                + agent_name
+                                + "_id"
+                                + str(ind)
+                                + "dr"
+                                + str(dr)
+                                + "ns"
+                                + str(ns)
+                            )
+                            combined_filepath = (
+                                f"{results_folder}/results_"
+                                + experiment_group
+                                + ("_" if len(experiment_group) > 0 else "")
+                                + agent_name
+                                + "_id"
+                                + str(ind)
+                                + "dr"
+                                + str(dr)
+                                + "ns"
+                                + str(ns)
+                                + "mns"
+                                + str(mns)
+                                + ("_" + val_type)
+                                + ".txt"
+                            )
 
-                        with open(combined_filepath, "w") as combined_file:
-                            for agent_id in range(agent_id_start, agent_id_end):
+                            with open(combined_filepath, "w") as combined_file:
+                                for agent_id in range(agent_id_start, agent_id_end):
 
-                                agent_results = []
+                                    agent_results = []
 
-                                for seed in seeds:
-                                    agent_filepath = (
-                                        single_result_folder
-                                        + "/agentid"
-                                        + str(agent_id)
-                                        + "_seed"
-                                        + str(seed)
-                                        + "mns"
-                                        + str(mns)
-                                        + ("_" + val_type)
-                                        + ".txt"
-                                    )
-
-                                    if not os.path.exists(agent_filepath):
-                                        if no_file_ok:
-                                            continue
-                                        else:
-                                            raise FileNotFoundError(
-                                                f"Expected file {agent_filepath} not found."
-                                            )
-
-                                    result = read_results_file(agent_filepath)
-
-                                    agent_results.append(result)
-
-                                if no_file_ok and len(agent_results) == 0:
-                                    continue
-
-                                all_kls = {}
-                                val_metrics = {}
-                                mean_errors = {}
-                                std_errors = {}
-
-                                result_agent_name = list(agent_results[0].keys())[0]
-
-                                for result in agent_results:
-                                    for i, indexer in enumerate(result[result_agent_name]["indexer"]):
-                                        
-                                        if indexer not in all_kls:
-                                            all_kls[indexer] = []
-                                            val_metrics[indexer] = []
-                                            mean_errors[indexer] = []
-                                            std_errors[indexer] = []
-
-                                        all_kls[indexer].append(result[result_agent_name]["kl"][i])
-                                        val_metrics[indexer].append(result[result_agent_name]["val_" + val_type][i])
-                                        mean_errors[indexer].append(result[result_agent_name]["mean_error"][i])
-                                        std_errors[indexer].append(result[result_agent_name]["std_error"][i])
-
-                                agent_settings = agent_factories.load_agent_config(
-                                    agent_id, agent_name
-                                ).settings
-
-                                for indexer, kls in all_kls.items():
-                                    kl_mean = sum([kl_quality for kl_quality in kls]) / len(kls)
-                                    kl_variance = sum(
-                                        [(kl_quality - kl_mean) ** 2 for kl_quality in kls]
-                                    ) / len(kls)
-                                    val_metric_mean = sum([vm for vm in val_metrics[indexer]]) / len(val_metrics[indexer])
-                                    val_metric_variance = sum(
-                                        [(vm - val_metric_mean) ** 2 for vm in val_metrics[indexer]]
-                                    ) / len(val_metrics[indexer])
-                                    mean_error = sum([me for me in mean_errors[indexer]]) / len(mean_errors[indexer])
-                                    std_error = sum([se for se in std_errors[indexer]]) / len(std_errors[indexer])
-
-                                    combined_file.write(
-                                        str(agent_id)
-                                        + " "
-                                        + str(kl_mean)
-                                        + " "
-                                        + "kl_variance="
-                                        + str(kl_variance)
-                                        + " "
-                                        + "val_" + val_type + "_mean="
-                                        + str(val_metric_mean)
-                                        + " "
-                                        + "val_" + val_type + "_variance="
-                                        + str(val_metric_variance)
-                                        + " "
-                                        + "mean_error="
-                                        + str(mean_error)
-                                        + " "
-                                        + "std_error="
-                                        + str(std_error)
-                                        + " "
-                                        + "indexer="
-                                        + str(indexer)
-                                        + " "
-                                        + " ".join(
-                                            [
-                                                str(k) + "=" + str(v)
-                                                for (
-                                                    k,
-                                                    v,
-                                                ) in agent_settings.items()
-                                            ]
+                                    for seed in seeds:
+                                        agent_filepath = (
+                                            single_result_folder
+                                            + "/agentid"
+                                            + str(agent_id)
+                                            + "_seed"
+                                            + str(seed)
+                                            + "mns"
+                                            + str(mns)
+                                            + ("_" + val_type)
+                                            + ".txt"
                                         )
-                                        + "\n"
-                                    )
+
+                                        if not os.path.exists(agent_filepath):
+                                            if no_file_ok:
+                                                continue
+                                            else:
+                                                raise FileNotFoundError(
+                                                    f"Expected file {agent_filepath} not found."
+                                                )
+
+                                        result = read_results_file(agent_filepath)
+
+                                        agent_results.append(result)
+
+                                    if no_file_ok and len(agent_results) == 0:
+                                        continue
+
+                                    all_kls = {}
+                                    val_metrics = {}
+                                    val_losses = {}
+                                    val_kls = {}
+                                    mean_errors = {}
+                                    std_errors = {}
+
+                                    result_agent_name = list(agent_results[0].keys())[0]
+
+                                    for result in agent_results:
+                                        for i, indexer in enumerate(result[result_agent_name]["indexer"]):
+                                            
+                                            if indexer not in all_kls:
+                                                all_kls[indexer] = []
+                                                val_metrics[indexer] = []
+                                                val_losses[indexer] = []
+                                                val_kls[indexer] = []
+                                                mean_errors[indexer] = []
+                                                std_errors[indexer] = []
+
+                                            all_kls[indexer].append(result[result_agent_name]["kl"][i])
+                                            val_metrics[indexer].append(result[result_agent_name]["val_" + val_type][i])
+                                            val_losses[indexer].append(result[result_agent_name]["val_loss"][i])
+                                            val_kls[indexer].append(result[result_agent_name]["val_kl"][i])
+                                            mean_errors[indexer].append(result[result_agent_name]["mean_error"][i])
+                                            std_errors[indexer].append(result[result_agent_name]["std_error"][i])
+
+                                    agent_settings = agent_factories.load_agent_config(
+                                        agent_id, agent_name
+                                    ).settings
+
+                                    for indexer, kls in all_kls.items():
+                                        kl_mean = sum([kl_quality for kl_quality in kls]) / len(kls)
+                                        kl_variance = sum(
+                                            [(kl_quality - kl_mean) ** 2 for kl_quality in kls]
+                                        ) / len(kls)
+                                        val_metric_mean = sum([vm for vm in val_metrics[indexer]]) / len(val_metrics[indexer])
+                                        val_metric_variance = sum(
+                                            [(vm - val_metric_mean) ** 2 for vm in val_metrics[indexer]]
+                                        ) / len(val_metrics[indexer])
+                                        val_loss_mean = sum(val_losses[indexer]) / len(val_losses[indexer]) if val_losses[indexer] else None
+                                        val_kl_mean = sum(val_kls[indexer]) / len(val_kls[indexer]) if val_kls[indexer] else None
+                                        mean_error = sum([me for me in mean_errors[indexer]]) / len(mean_errors[indexer])
+                                        std_error = sum([se for se in std_errors[indexer]]) / len(std_errors[indexer])
+
+                                        combined_file.write(
+                                            str(agent_id)
+                                            + " "
+                                            + str(kl_mean)
+                                            + " "
+                                            + "kl_variance="
+                                            + str(kl_variance)
+                                            + " "
+                                            + "val_" + val_type + "_mean="
+                                            + str(val_metric_mean)
+                                            + " "
+                                            + "val_" + val_type + "_variance="
+                                            + str(val_metric_variance)
+                                            + " "
+                                            + ("val_loss=" + str(val_loss_mean) + " " if val_loss_mean is not None else "")
+                                            + ("val_kl=" + str(val_kl_mean) + " " if val_kl_mean is not None else "")
+                                            + "mean_error="
+                                            + str(mean_error)
+                                            + " "
+                                            + "std_error="
+                                            + str(std_error)
+                                            + " "
+                                            + "indexer="
+                                            + str(indexer)
+                                            + " "
+                                            + " ".join(
+                                                [
+                                                    str(k) + "=" + str(v)
+                                                    for (
+                                                        k,
+                                                        v,
+                                                    ) in agent_settings.items()
+                                                ]
+                                            )
+                                            + "\n"
+                                        )
+                                pbar.update(1)
 
 
 
@@ -567,27 +589,27 @@ def main(
         )
         print("Finished all runs")
 
-    max_agent_id = (
-        agent_id_end
-        if agent_id_end != -1
-        else len(agent_factories.load_agent_config_sweep(agent_name))
-    )
+        max_agent_id = (
+            agent_id_end
+            if agent_id_end != -1
+            else len(agent_factories.load_agent_config_sweep(agent_name))
+        )
 
-    combine_results(
-        experiment_group,
-        seeds,
-        agent_name,
-        input_dim,
-        data_ratio,
-        noise_std,
-        max_num_samples,
-        agent_id_start,
-        max_agent_id,
-        results_folder,
-        no_file_ok=single_mns_per_experiment
-    )
+        combine_results(
+            experiment_group,
+            seeds,
+            agent_name,
+            input_dim,
+            data_ratio,
+            noise_std,
+            max_num_samples,
+            agent_id_start,
+            max_agent_id,
+            results_folder,
+            no_file_ok=single_mns_per_experiment
+        )
 
-    print("Combined results")
+        print("Combined results")
 
 
 

@@ -60,7 +60,7 @@ def make_benchmark_kernel(input_dim: int = 1):
 
 
 def gaussian_data(
-    seed: int, num_train: int, input_dim: int, num_test: int, use_double_precision: bool = True
+    seed: int, num_train: int, input_dim: int, num_test: int, use_double_precision: bool = True, val_data_ratio: float = 0.2
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Generate Gaussian training and test data.
 
@@ -69,6 +69,7 @@ def gaussian_data(
         num_train: Number of training samples
         input_dim: Input dimension
         num_test: Number of test samples
+        val_data_ratio: Ratio of validation data to training data
 
     Returns:
         Tuple of (x_train, x_test, x_val) tensors
@@ -83,7 +84,7 @@ def gaussian_data(
     x_test = torch.randn(num_test, input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     # Generate validation data
-    x_val = torch.randn(num_test, input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
+    x_val = torch.randn(max(1, int(num_train * val_data_ratio)), input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     return x_train, x_test, x_val
 

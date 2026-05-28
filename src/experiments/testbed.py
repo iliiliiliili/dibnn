@@ -55,7 +55,8 @@ class GPRegression:
 
         num_train, input_dim = x_train.shape
         num_test_x_cache, input_dim_test = x_test.shape
-        assert input_dim == input_dim_test
+        num_val_x_cache, input_dim_val = x_val.shape
+        assert input_dim == input_dim_test == input_dim_val
 
         self._tau = tau
         self._input_dim = input_dim
@@ -64,6 +65,7 @@ class GPRegression:
         self._x_val = x_val
         self._num_train = num_train
         self._num_test_x_cache = num_test_x_cache
+        self._num_val_x_cache = num_val_x_cache
         self._noise_std = noise_std
         self._kernel_ridge = kernel_ridge
 
@@ -90,14 +92,14 @@ class GPRegression:
                 t=None, x_test=self._x_val, get="nngp", compute_cov=True
             )
             self._test_cov = self._test_cov + kernel_ridge * torch.eye(num_test_x_cache)
-            self._val_cov = self._val_cov + kernel_ridge * torch.eye(num_test_x_cache)
+            self._val_cov = self._val_cov + kernel_ridge * torch.eye(num_val_x_cache)
             assert self._test_mean.shape == torch.Size([num_test_x_cache, 1])
             assert self._test_cov.shape == torch.Size(
                 [num_test_x_cache, num_test_x_cache]
             )
-            assert self._val_mean.shape == torch.Size([num_test_x_cache, 1])
+            assert self._val_mean.shape == torch.Size([num_val_x_cache, 1])
             assert self._val_cov.shape == torch.Size(
-                [num_test_x_cache, num_test_x_cache]
+                [num_val_x_cache, num_val_x_cache]
             )
 
     @property
@@ -239,7 +241,10 @@ class TestbedGPRegression(TestbedProblem):
         posterior_std = torch.sqrt(torch.diag(self.data_sampler.val_cov)).to(device)
         posterior_std += self.std_ridge
 
-        enn_samples = enn_sampler(x_val, seed, num_samples).squeeze(-1)
+        enn_samples = enn_sampler(x_val, seed, num_samples)#.squeeze(-1)
+
+        if len(enn_samples.shape) == 3:
+            enn_samples = enn_samples.squeeze(-1)
 
         assert enn_samples.shape == (num_samples, num_val)
         enn_mean = torch.mean(enn_samples, dim=0)
