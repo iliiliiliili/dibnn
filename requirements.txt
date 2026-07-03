@@ -4,3 +4,5 @@ scikit-learn
 typing-extensions
 absl-py
 fire
+tqdm
+pandas

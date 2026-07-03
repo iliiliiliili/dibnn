@@ -43,6 +43,7 @@ def single_run(
     results_file_prefix,
     use_double_precision,
     reduce_batch,
+    test_random_set_count,
     device,
 ):
 
@@ -61,10 +62,10 @@ def single_run(
     # Form the appropriate agent for training
     agent = agents.VanillaEnnAgent(agent_config.config_ctor(), use_double_precision=use_double_precision, fixed_sampler=True)
 
-    train_seed, all_indices_seed, best_samples_seed = split_seed(agent_seed, 3)
+    train_seed, all_indices_seed, best_samples_seed, random_set_evaluation_seed = split_seed(agent_seed, 4)
 
     # Train
-    enn_sampler = agent(
+    (enn_sampler_fixed, enn_sampler_free), val_loss, val_kl = agent(
         problem.train_data,
         train_seed,
         problem.prior_knowledge,
@@ -82,10 +83,61 @@ def single_run(
     for max_samples in mns_list:
         # Evaluate the quality of the ENN sampler after training
 
+        
+        with open(
+            results_file_prefix
+            + "mns"
+            + str(max_samples)
+            + "_randomset.txt",
+            "w",
+        ) as f:
+
+            for random_samples_count in range(2, max_samples + 1):
+
+                random_set_evaluation_seed, current_set_seed = split_seed(random_set_evaluation_seed, 2)
+
+                random_set_kls = []
+
+                for _ in range(test_random_set_count):
+
+                    current_set_seed, evaluation_seed = split_seed(current_set_seed, 2)
+
+                    random_set_kl_quality = problem.evaluate_quality(
+                        enn_sampler_free, seed=evaluation_seed, num_samples=random_samples_count, device=device
+                    )
+
+                    random_set_kls.append(random_set_kl_quality.kl_estimate)
+                
+                mean_random_set_kl = sum(random_set_kls) / len(random_set_kls)
+                var_random_set_kl = sum((x - mean_random_set_kl) ** 2 for x in random_set_kls) / len(random_set_kls)
+            
+                f.write(
+                    str(agent_id)
+                    + " "
+                    + str(mean_random_set_kl)
+                    + " "
+                    + "kl_variance="
+                    + str(var_random_set_kl)
+                    + " "
+                    + "indexer="
+                    + str(random_samples_count)
+                    + " "
+                    + " ".join(
+                        [
+                            str(k) + "=" + str(v)
+                            for (
+                                k,
+                                v,
+                            ) in agent_config.settings.items()
+                        ]
+                    )
+                    + "\n"
+                )
+
         all_indices = agent.create_all_indices(max_samples, seed=all_indices_seed, device=device)
 
         best_samples_kl = problem.find_best_samples(
-            enn_sampler, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=False, verbose=False
+            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=False, verbose=False
         )
         
         with open(
@@ -141,7 +193,7 @@ def single_run(
                 )
 
         best_samples_ll = problem.find_best_samples(
-            enn_sampler, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True
+            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True
         )
 
         with open(
@@ -196,7 +248,7 @@ def single_run(
                     + "\n"
                 )
 
-        print("#", end="")
+        print("#", end="", flush=True)
 
 def run_experiments(experiments, devices, processes_per_device, debug=False):
     print(f"Starting {len(experiments)} experiments")
@@ -238,7 +290,7 @@ def run_experiments(experiments, devices, processes_per_device, debug=False):
             else:
 
                 def error_callback(e, args=experiment_args):
-                    print("/ ", end="")
+                    print("/ ", end="", flush=True)
                     with open("./errors.log", "a") as f:
                         f.write(f"Error: {str(e)}\nArgs: {args}\n")
 
@@ -347,8 +399,6 @@ def combine_results(
 
                                     all_kls = {}
                                     val_metrics = {}
-                                    val_losses = {}
-                                    val_kls = {}
                                     mean_errors = {}
                                     std_errors = {}
 
@@ -360,15 +410,11 @@ def combine_results(
                                             if indexer not in all_kls:
                                                 all_kls[indexer] = []
                                                 val_metrics[indexer] = []
-                                                val_losses[indexer] = []
-                                                val_kls[indexer] = []
                                                 mean_errors[indexer] = []
                                                 std_errors[indexer] = []
 
                                             all_kls[indexer].append(result[result_agent_name]["kl"][i])
                                             val_metrics[indexer].append(result[result_agent_name]["val_" + val_type][i])
-                                            val_losses[indexer].append(result[result_agent_name]["val_loss"][i])
-                                            val_kls[indexer].append(result[result_agent_name]["val_kl"][i])
                                             mean_errors[indexer].append(result[result_agent_name]["mean_error"][i])
                                             std_errors[indexer].append(result[result_agent_name]["std_error"][i])
 
@@ -385,8 +431,6 @@ def combine_results(
                                         val_metric_variance = sum(
                                             [(vm - val_metric_mean) ** 2 for vm in val_metrics[indexer]]
                                         ) / len(val_metrics[indexer])
-                                        val_loss_mean = sum(val_losses[indexer]) / len(val_losses[indexer]) if val_losses[indexer] else None
-                                        val_kl_mean = sum(val_kls[indexer]) / len(val_kls[indexer]) if val_kls[indexer] else None
                                         mean_error = sum([me for me in mean_errors[indexer]]) / len(mean_errors[indexer])
                                         std_error = sum([se for se in std_errors[indexer]]) / len(std_errors[indexer])
 
@@ -404,8 +448,6 @@ def combine_results(
                                             + "val_" + val_type + "_variance="
                                             + str(val_metric_variance)
                                             + " "
-                                            + ("val_loss=" + str(val_loss_mean) + " " if val_loss_mean is not None else "")
-                                            + ("val_kl=" + str(val_kl_mean) + " " if val_kl_mean is not None else "")
                                             + "mean_error="
                                             + str(mean_error)
                                             + " "
@@ -431,7 +473,7 @@ def combine_results(
 
 
 def main(
-    input_dim=(10, 100, 1000),
+    input_dim=(1, 10, 100),
     data_ratio=(1.0, 10.0, 100.0),
     noise_std=(0.01, 0.1, 1.0),
     seeds=(2605, 26, 0, 5),
@@ -447,6 +489,7 @@ def main(
     use_double_precision=False,
     reduce_batch_dims=[],
     lens_max_num_samples=[125],
+    test_random_set_count=5,
 ):
     """Run testbed sweep.
 
@@ -460,6 +503,8 @@ def main(
         agent: Which agent family to use.
         experiment_group: Name of the experiment group.
     """
+
+    print("A")
 
     os.makedirs(results_folder, exist_ok=True)
     os.makedirs(f"{results_folder}/{agent_name}", exist_ok=True)
@@ -553,6 +598,7 @@ def main(
                             results_file_prefix,
                             use_double_precision,
                             reduce_batch,
+                            test_random_set_count,
                         )
 
                         to_add = []
@@ -572,7 +618,7 @@ def main(
                             )
 
                             if os.path.exists(results_file_kl) and os.path.exists(results_file_ll):
-                                print(".", end="")
+                                print(".", end="", flush=True)
                             else:
                                 to_add.append(arguments)
 
@@ -588,6 +634,8 @@ def main(
             experiments, devices, processes_per_device=processes_per_device, debug=debug
         )
         print("Finished all runs")
+    else:
+        print("No experiments to run.")
 
         max_agent_id = (
             agent_id_end
@@ -610,8 +658,6 @@ def main(
         )
 
         print("Combined results")
-
-
 
 if __name__ == "__main__":
     fire.Fire(main)

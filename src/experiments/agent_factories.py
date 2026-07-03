@@ -431,28 +431,32 @@ def make_dropout_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
-# def make_dropout_best_sweep() -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
 
-#     # Adding reasonably interesting dropout agents
-#     for dropout_rate in [0.05]:
-#         for regularization_scale in [1e-6]:
-#             for num_layers in [2]:
-#                 for hidden_size in [50]:
-#                     settings = {
-#                         "agent": "dropout",
-#                         "dropout_rate": dropout_rate,
-#                         "regularization_scale": regularization_scale,
-#                         "num_layers": num_layers,
-#                         "hidden_size": hidden_size,
-#                     }
-#                     config_ctor = make_dropout_ctor(
-#                         dropout_rate, regularization_scale, hidden_size, num_layers
-#                     )
-#                     sweep.append(AgentCtorConfig(settings, config_ctor))
+def make_dropout_best_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
 
-#     return sweep
+    # Adding reasonably interesting dropout agents
+    for dropout_rate in [0.2]:
+        for regularization_scale in [1e-6]:
+            for num_layers in [2]:
+                for hidden_size in [100]:
+                    for early_stopping_mode in ["kl"]:
+                        settings = {
+                            "agent": "dropout",
+                            "dropout_rate": dropout_rate,
+                            "regularization_scale": regularization_scale,
+                            "num_layers": num_layers,
+                            "hidden_size": hidden_size,
+                            "early_stopping_mode": early_stopping_mode,
+                        }
+                        config_ctor = make_dropout_ctor(
+                            dropout_rate, regularization_scale, hidden_size, num_layers, early_stopping_mode=early_stopping_mode
+                        )
+                        sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
 
 
 def make_bbb_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
@@ -464,6 +468,40 @@ def make_bbb_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
         for learning_rate in [1e-3, 3e-4, 1e-4]:
             for num_layers in [2, 3]:
                 for hidden_size in [50, 100]:
+                    for training_epochs in [1000]:
+                        for early_stopping_mode in ["loss", "kl"]:
+                            settings = {
+                                "agent": "bbb",
+                                "sigma_0": sigma_0,
+                                "learning_rate": learning_rate,
+                                "num_layers": num_layers,
+                                "hidden_size": hidden_size,
+                                "training_epochs": training_epochs,
+                                "early_stopping_mode": early_stopping_mode,
+                            }
+                            config_ctor = make_bbb_ctor(
+                                sigma_0,
+                                learning_rate,
+                                hidden_size,
+                                num_layers,
+                                training_epochs=training_epochs,
+                                early_stopping_mode=early_stopping_mode,
+                                batch_size=1000 if reduce_batch else None,
+                            )
+                            sweep.append(AgentCtorConfig(settings, config_ctor))
+
+    return sweep
+
+
+def make_bbb_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
+
+    # Adding reasonably interesting bbb agents
+    for sigma_0 in [100]:
+        for learning_rate in [1e-3]:
+            for num_layers in [3]:
+                for hidden_size in [100]:
                     for training_epochs in [1000]:
                         for early_stopping_mode in ["loss", "kl"]:
                             settings = {
@@ -625,42 +663,46 @@ def make_ensemble_sweep() -> List[AgentCtorConfig]:
     return sweep
 
 
-# def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
+def make_ensemble_best_sweep() -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
 
-#     # Adding reasonably interesting ensemble agents
-#     for num_ensemble in [30]:
-#         for noise_scale in [1]:
-#             for prior_scale in [1]:
-#                 for num_layers in [2]:
-#                     for hidden_size in [50]:
-#                         for learning_rate in [1e-3]:
-#                             for training_epochs in [1000]:
-#                                 settings = {
-#                                     "agent": "ensemble",
-#                                     "num_ensemble": num_ensemble,
-#                                     "noise_scale": noise_scale,
-#                                     "prior_scale": prior_scale,
-#                                     "num_layers": num_layers,
-#                                     "hidden_size": hidden_size,
-#                                     "learning_rate": learning_rate,
-#                                     "training_epochs": training_epochs,
-#                                     "max_num_samples": num_ensemble,
-#                                 }
-#                                 config_ctor = make_ensemble_ctor(
-#                                     num_ensemble=num_ensemble,
-#                                     noise_scale=noise_scale,
-#                                     prior_scale=prior_scale,
-#                                     learning_rate=learning_rate,
-#                                     hidden_size=hidden_size,
-#                                     num_layers=num_layers,
-#                                     training_epochs=training_epochs,
-#                                     # batch_size=100,
-#                                 )
-#                                 sweep.append(AgentCtorConfig(settings, config_ctor))
+    # Adding reasonably interesting ensemble agents
+    for num_ensemble in [30]:
+        for noise_scale in [0]:
+            for prior_scale in [1]:
+                for num_layers in [3]:
+                    for hidden_size in [50]:
+                        for learning_rate in [1e-3]:
+                            for training_epochs in [1000]:
+                                for early_stopping_mode in ["loss", "kl"]:
+                                    settings = {
+                                        "agent": "ensemble",
+                                        "num_ensemble": num_ensemble,
+                                        "mux_num_samples": num_ensemble,
+                                        "noise_scale": noise_scale,
+                                        "prior_scale": prior_scale,
+                                        "num_layers": num_layers,
+                                        "hidden_size": hidden_size,
+                                        "learning_rate": learning_rate,
+                                        "training_epochs": training_epochs,
+                                        "max_num_samples": num_ensemble,
+                                        "early_stopping_mode": early_stopping_mode,
+                                    }
+                                    config_ctor = make_ensemble_ctor(
+                                        num_ensemble=num_ensemble,
+                                        noise_scale=noise_scale,
+                                        prior_scale=prior_scale,
+                                        learning_rate=learning_rate,
+                                        hidden_size=hidden_size,
+                                        num_layers=num_layers,
+                                        training_epochs=training_epochs,
+                                        early_stopping_mode=early_stopping_mode,
+                                    )
+                                    sweep.append(AgentCtorConfig(settings, config_ctor))
 
-#     return sweep
+    return sweep
+
 
 
 def make_hypermodel_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
@@ -690,7 +732,7 @@ def make_hypermodel_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
                                 hidden_size,
                                 num_layers,
                                 num_index_samples=index_dim * 20,
-                                batch_size=100 if reduce_batch else None,
+                                batch_size=50 if reduce_batch else None,
                                 early_stopping_mode=early_stopping_mode,
                             )
                             sweep.append(AgentCtorConfig(settings, config_ctor))
@@ -698,36 +740,39 @@ def make_hypermodel_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     return sweep
 
 
-# def make_hypermodel_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
+def make_hypermodel_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
 
-#     # Adding reasonably interesting hypermodel agents
-#     for index_dim in [20]:
-#         for noise_scale in [1]:
-#             for prior_scale in [5]:
-#                 for num_layers in [2]:
-#                     for hidden_size in [50]:
-#                         settings = {
-#                             "agent": "hypermodel",
-#                             "index_dim": index_dim,
-#                             "noise_scale": noise_scale,
-#                             "prior_scale": prior_scale,
-#                             "num_layers": num_layers,
-#                             "hidden_size": hidden_size,
-#                         }
-#                         config_ctor = make_hypermodel_ctor(
-#                             index_dim,
-#                             noise_scale,
-#                             prior_scale,
-#                             hidden_size,
-#                             num_layers,
-#                             num_index_samples=index_dim * 20,
-#                             batch_size=100 if reduce_batch else None,
-#                         )
-#                         sweep.append(AgentCtorConfig(settings, config_ctor))
+    # Adding reasonably interesting hypermodel agents
+    for index_dim in [20]:
+        for noise_scale in [1]:
+            for prior_scale in [0]:
+                for num_layers in [2]:
+                    for hidden_size in [50]:
+                        for early_stopping_mode in ["kl"]:
+                            settings = {
+                                "agent": "hypermodel",
+                                "index_dim": index_dim,
+                                "noise_scale": noise_scale,
+                                "prior_scale": prior_scale,
+                                "num_layers": num_layers,
+                                "hidden_size": hidden_size,
+                                "early_stopping_mode": early_stopping_mode,
+                            }
+                            config_ctor = make_hypermodel_ctor(
+                                index_dim,
+                                noise_scale,
+                                prior_scale,
+                                hidden_size,
+                                num_layers,
+                                num_index_samples=index_dim * 20,
+                                batch_size=50 if reduce_batch else None,
+                                early_stopping_mode=early_stopping_mode,
+                            )
+                            sweep.append(AgentCtorConfig(settings, config_ctor))
 
-#     return sweep
+    return sweep
 
 
 def make_vnn_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
@@ -799,68 +844,68 @@ def make_vnn_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     return sweep
 
 
-# def make_vnn_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
 
-#     for activation in ["relu"]:
-#         for learning_rate in [1e-3]:
-#             for num_layers in [3]:
-#                 for hidden_size in [100]:
-#                     for activation_mode in [
-#                         "mean",
-#                     ]:
-#                         for use_batch_norm in [False]:
-#                             for global_std_mode in ["multiply"]:
-#                                 for num_index_samples in [100]:
-#                                     for training_epochs in [1000]:
-#                                         for early_stopping_mode in ["loss", "kl"]:
-#                                             batch_norm_mode = activation_mode
+def make_vnn_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
 
-#                                             current_activation = {
-#                                                 "relu": torch.nn.ReLU(),
-#                                                 "tanh": torch.nn.Tanh(),
-#                                                 "lrelu": torch.nn.LeakyReLU(),
-#                                             }[activation]
+    for activation in ["lrelu"]:
+        for learning_rate in [1e-4]:
+            for num_layers in [2]:
+                for hidden_size in [100]:
+                    for activation_mode in ["mean"]:
+                        for use_batch_norm in [False]:
+                            for global_std_mode in ["none"]:
+                                for num_index_samples in [10]:
+                                    for training_epochs in [1000]:
+                                        for early_stopping_mode in ["loss", "kl"]:
 
-#                                             if len(activation_mode.split("+")) > 1:
-#                                                 current_activation = [
-#                                                     current_activation
-#                                                 ] * len(activation_mode.split("+"))
+                                            batch_norm_mode = activation_mode
 
-#                                             settings = {
-#                                                 "agent": "vnn",
-#                                                 "activation": activation,
-#                                                 "learning_rate": learning_rate,
-#                                                 "num_layers": num_layers,
-#                                                 "hidden_size": hidden_size,
-#                                                 "activation_mode": activation_mode,
-#                                                 "batch_norm_mode": batch_norm_mode,
-#                                                 "use_batch_norm": use_batch_norm,
-#                                                 "global_std_mode": global_std_mode,
-#                                                 "training_epochs": training_epochs,
-#                                                 "num_index_samples": num_index_samples,
-#                                                 "early_stopping_mode": early_stopping_mode,
-#                                             }
-#                                             config_ctor = make_vnn_ctor(
-#                                                 current_activation,
-#                                                 activation_mode,
-#                                                 use_batch_norm,
-#                                                 batch_norm_mode,
-#                                                 global_std_mode,
-#                                                 num_index_samples,
-#                                                 hidden_size,
-#                                                 training_epochs=training_epochs,
-#                                                 batch_size=(
-#                                                     1000 if reduce_batch else None
-#                                                 ),
-#                                                 early_stopping_mode=early_stopping_mode,
-#                                             )
-#                                             sweep.append(
-#                                                 AgentCtorConfig(settings, config_ctor)
-#                                             )
+                                            current_activation = {
+                                                "relu": torch.nn.ReLU(),
+                                                "tanh": torch.nn.Tanh(),
+                                                "lrelu": torch.nn.LeakyReLU(),
+                                            }[activation]
 
-#     return sweep
+                                            if len(activation_mode.split("+")) > 1:
+                                                current_activation = [
+                                                    current_activation
+                                                ] * len(activation_mode.split("+"))
+
+                                            settings = {
+                                                "agent": "vnn",
+                                                "activation": activation,
+                                                "learning_rate": learning_rate,
+                                                "num_layers": num_layers,
+                                                "hidden_size": hidden_size,
+                                                "activation_mode": activation_mode,
+                                                "batch_norm_mode": batch_norm_mode,
+                                                "use_batch_norm": use_batch_norm,
+                                                "global_std_mode": global_std_mode,
+                                                "training_epochs": training_epochs,
+                                                "num_index_samples": num_index_samples,
+                                                "early_stopping_mode": early_stopping_mode,
+                                            }
+                                            config_ctor = make_vnn_ctor(
+                                                current_activation,
+                                                activation_mode,
+                                                use_batch_norm,
+                                                batch_norm_mode,
+                                                global_std_mode,
+                                                num_index_samples,
+                                                hidden_size,
+                                                training_epochs=training_epochs,
+                                                batch_size=(
+                                                    1000 if reduce_batch else None
+                                                ),
+                                                early_stopping_mode=early_stopping_mode,
+                                            )
+                                            sweep.append(
+                                                AgentCtorConfig(settings, config_ctor)
+                                            )
+
+    return sweep
 
 
 def make_layer_ensembles_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
@@ -913,46 +958,49 @@ def make_layer_ensembles_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
     return sweep
 
 
-# def make_layer_ensembles_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
+def make_layer_ensembles_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
+    """Generates the benchmark sweep for paper results."""
+    sweep = []
 
-#     # Adding reasonably interesting ensemble agents
-#     # for num_ensemble in [2, 3]:
-#     for num_ensemble, inference_samples in [
-#         (5, ["full"]),
-#     ]:
-#         for noise_scale in [1]:
-#             for prior_scale in [1]:
-#                 for num_layers in [2]:
-#                     for hidden_size in [50]:
-#                         num_ensembles = [num_ensemble for _ in range(num_layers + 1)]
-#                         max_num_samples = reduce(lambda x, y: x * y, num_ensembles)
+    # Adding reasonably interesting ensemble agents
+    # for num_ensemble in [2, 3]:
+    for num_ensemble, inference_samples in [
+        (3, ["full"]),
+    ]:
+        for noise_scale in [1]:
+            for prior_scale in [1]:
+                for num_layers in [2]:
+                    for hidden_size in [50]:
+                        for early_stopping_mode in ["loss", "kl"]: 
+                            num_ensembles = [num_ensemble for _ in range(num_layers + 1)]
+                            max_num_samples = reduce(lambda x, y: x * y, num_ensembles)
 
-#                         settings = {
-#                             "agent": "layer_ensembles",
-#                             "num_ensembles": num_ensemble,
-#                             "inference_samples": str(inference_samples),
-#                             "noise_scale": noise_scale,
-#                             "prior_scale": prior_scale,
-#                             "num_layers": num_layers,
-#                             "hidden_size": hidden_size,
-#                             "max_num_samples": max_num_samples,
-#                         }
-#                         config_ctor = make_layer_ensembles_ctor(
-#                             num_ensembles=num_ensembles,
-#                             noise_scale=noise_scale,
-#                             prior_scale=prior_scale,
-#                             learning_rate=1e-3,
-#                             hidden_size=hidden_size,
-#                             num_layers=num_layers,
-#                             inference_samples=inference_samples,
-#                             training_epochs=1000,
-#                             batch_size=1000 if reduce_batch else None,
-#                         )
-#                         sweep.append(AgentCtorConfig(settings, config_ctor))
+                            settings = {
+                                "agent": "layer_ensembles",
+                                "num_ensembles": num_ensemble,
+                                "inference_samples": str(inference_samples),
+                                "noise_scale": noise_scale,
+                                "prior_scale": prior_scale,
+                                "num_layers": num_layers,
+                                "hidden_size": hidden_size,
+                                "max_num_samples": max_num_samples,
+                                "early_stopping_mode": early_stopping_mode,
+                            }
+                            config_ctor = make_layer_ensembles_ctor(
+                                num_ensembles=num_ensembles,
+                                noise_scale=noise_scale,
+                                prior_scale=prior_scale,
+                                learning_rate=1e-3,
+                                hidden_size=hidden_size,
+                                num_layers=num_layers,
+                                inference_samples=inference_samples,
+                                training_epochs=1000,
+                                batch_size=1000 if reduce_batch else None,
+                                early_stopping_mode=early_stopping_mode,
+                            )
+                            sweep.append(AgentCtorConfig(settings, config_ctor))
 
-#     return sweep
+    return sweep
 
 
 def make_agent_sweep(
@@ -990,7 +1038,7 @@ def make_agent_sweep(
     elif agent == "ensemble_best":
         agent_sweep = make_ensemble_best_sweep()
     elif agent == "hypermodel":
-        agent_sweep = make_hypermodel_sweep()
+        agent_sweep = make_hypermodel_sweep(reduce_batch=reduce_batch)
     elif agent == "hypermodel_best":
         agent_sweep = make_hypermodel_best_sweep(reduce_batch=reduce_batch)
     elif agent == "vnn":

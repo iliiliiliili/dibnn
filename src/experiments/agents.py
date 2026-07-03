@@ -311,7 +311,11 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
 
         model.eval()
 
-        sampler = extract_fixed_enn_sampler(model, enn, device) if self.fixed_sampler else extract_enn_sampler(model, enn, device)
+        if self.fixed_sampler:
+            sampler = (extract_fixed_enn_sampler(model, enn, device), extract_enn_sampler(model, enn, device))
+        else:
+            extract_enn_sampler(model, enn, device)
+
 
         val_loss = self._evaluate_validation_metric(
             enn=enn,

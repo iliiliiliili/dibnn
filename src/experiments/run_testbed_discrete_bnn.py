@@ -40,6 +40,7 @@ def main(
     device="cuda:0",
     results_folder="results",
     use_double_precision=False,
+    test_random_set_count=10,
 ):
     """Run testbed sweep.
 
@@ -107,10 +108,10 @@ def main(
                     # Form the appropriate agent for training
                     agent = agents.VanillaEnnAgent(agent_config.config_ctor(), use_double_precision=use_double_precision, fixed_sampler=True)
 
-                    train_seed, all_indices_seed, best_samples_seed = split_seed(agent_seed, 3)
+                    train_seed, all_indices_seed, best_samples_seed, random_set_evaluation_seed = split_seed(agent_seed, 4)
 
                     # Train
-                    enn_sampler = agent(
+                    (enn_sampler_fixed, enn_sampler_free), val_loss, val_kl = agent(
                         problem.train_data,
                         train_seed,
                         problem.prior_knowledge,
@@ -124,14 +125,73 @@ def main(
                     else:
                         mns_list = [*max_num_samples]
 
-
                     for max_samples in mns_list:
-                        # Evaluate the quality of the ENN sampler after training
+
+                        # Random sets
+                        for random_samples_count in range(2, max_samples):
+
+                            random_set_evaluation_seed, current_set_seed = split_seed(random_set_evaluation_seed, 2)
+
+                            random_set_kls = []
+
+                            for _ in range(test_random_set_count):
+
+                                current_set_seed, evaluation_seed = split_seed(current_set_seed, 2)
+
+                                random_set_kl_quality = problem.evaluate_quality(
+                                    enn_sampler_free, seed=evaluation_seed, num_samples=random_samples_count, device=device
+                                )
+
+                                random_set_kls.append(random_set_kl_quality.kl_estimate)
+                            
+                            mean_random_set_kl = sum(random_set_kls) / len(random_set_kls)
+                            var_random_set_kl = sum((x - mean_random_set_kl) ** 2 for x in random_set_kls) / len(random_set_kls)
+                            
+                            with open(
+                                f"{results_folder}/{agent_name}/random_set_results_"
+                                + experiment_group
+                                + ("_" if len(experiment_group) > 0 else "")
+                                + agent_name
+                                + "_id"
+                                + str(ind)
+                                + "dr"
+                                + str(dr)
+                                + "ns"
+                                + str(ns)
+                                + "mns"
+                                + str(max_samples)
+                                + "_kl.txt",
+                                "a",
+                            ) as f:
+
+                                f.write(
+                                    str(agent_id)
+                                    + " "
+                                    + str(mean_random_set_kl)
+                                    + " "
+                                    + "kl_variance="
+                                    + str(var_random_set_kl)
+                                    + " "
+                                    + "indexer="
+                                    + str(random_samples_count)
+                                    + " "
+                                    + " ".join(
+                                        [
+                                            str(k) + "=" + str(v)
+                                            for (
+                                                k,
+                                                v,
+                                            ) in agent_config.settings.items()
+                                        ]
+                                    )
+                                    + "\n"
+                                )
 
                         all_indices = agent.create_all_indices(max_samples, seed=all_indices_seed, device=device)
 
+                        # Best sets based on kl
                         best_samples_kl = problem.find_best_samples(
-                            enn_sampler, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=False
+                            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=False
                         )
 
                         for samples, best_kl_dict in best_samples_kl.items():
@@ -198,8 +258,9 @@ def main(
                                     + "\n"
                                 )
 
+                        # Best sets based on ll
                         best_samples_ll = problem.find_best_samples(
-                            enn_sampler, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True
+                            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True
                         )
 
                         for samples, best_kl_dict in best_samples_ll.items():
@@ -265,6 +326,7 @@ def main(
                                     )
                                     + "\n"
                                 )
+
 
 
 if __name__ == "__main__":
