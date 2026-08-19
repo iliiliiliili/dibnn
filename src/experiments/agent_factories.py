@@ -441,7 +441,7 @@ def make_dropout_best_sweep() -> List[AgentCtorConfig]:
         for regularization_scale in [1e-6]:
             for num_layers in [2]:
                 for hidden_size in [100]:
-                    for early_stopping_mode in ["kl"]:
+                    for early_stopping_mode in ["loss", "kl"]:
                         settings = {
                             "agent": "dropout",
                             "dropout_rate": dropout_rate,

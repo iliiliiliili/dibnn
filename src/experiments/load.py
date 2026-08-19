@@ -84,7 +84,7 @@ def gaussian_data(
     x_test = torch.randn(num_test, input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     # Generate validation data
-    x_val = torch.randn(max(1, int(num_train * val_data_ratio)), input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
+    x_val = torch.randn(max(2, int(num_train * val_data_ratio)), input_dim, generator=generator, dtype=torch.float64 if use_double_precision else torch.float32)
 
     return x_train, x_test, x_val
 

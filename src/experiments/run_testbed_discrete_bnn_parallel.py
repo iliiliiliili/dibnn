@@ -76,14 +76,14 @@ def single_run(
     )
 
     if agent_config.settings["agent"] in ["layer_ensembles", "ensemble"]:
-        mns_list = [agent_config.settings["max_num_samples"]]
+        # mns_list = [agent_config.settings["max_num_samples"]]
+        mns_list = [*max_num_samples]
     else:
         mns_list = [*max_num_samples]
 
     for max_samples in mns_list:
         # Evaluate the quality of the ENN sampler after training
 
-        
         with open(
             results_file_prefix
             + "mns"
@@ -327,14 +327,14 @@ def combine_results(
         * len(data_ratios)
         * len(noise_stds)
         * len(max_num_samples)
-        * 2
+        * 3
     )
     with tqdm(total=total_combinations, desc="Combining results") as pbar:
         for ind in input_dims:
             for dr in data_ratios:
                 for ns in noise_stds:
                     for mns in max_num_samples:
-                        for val_type in ["kl", "ll"]:
+                        for val_type in ["kl", "ll", "randomset"]:
                             single_result_folder = (
                                 f"{results_folder}/{agent_name}/results_"
                                 + experiment_group
@@ -413,10 +413,16 @@ def combine_results(
                                                 mean_errors[indexer] = []
                                                 std_errors[indexer] = []
 
-                                            all_kls[indexer].append(result[result_agent_name]["kl"][i])
-                                            val_metrics[indexer].append(result[result_agent_name]["val_" + val_type][i])
-                                            mean_errors[indexer].append(result[result_agent_name]["mean_error"][i])
-                                            std_errors[indexer].append(result[result_agent_name]["std_error"][i])
+                                            if val_type == "randomset":
+                                                all_kls[indexer].append(result[result_agent_name]["kl"][i])
+                                                val_metrics[indexer].append(0)
+                                                mean_errors[indexer].append(0)
+                                                std_errors[indexer].append(0)
+                                            else:
+                                                all_kls[indexer].append(result[result_agent_name]["kl"][i])
+                                                val_metrics[indexer].append(result[result_agent_name]["val_" + val_type][i])
+                                                mean_errors[indexer].append(result[result_agent_name]["mean_error"][i])
+                                                std_errors[indexer].append(result[result_agent_name]["std_error"][i])
 
                                     agent_settings = agent_factories.load_agent_config(
                                         agent_id, agent_name
@@ -488,7 +494,7 @@ def main(
     results_folder="results",
     use_double_precision=False,
     reduce_batch_dims=[],
-    lens_max_num_samples=[125],
+    lens_max_num_samples=[27],
     test_random_set_count=5,
 ):
     """Run testbed sweep.
@@ -517,9 +523,11 @@ def main(
         noise_std = [float(noise_std)]
 
     single_mns_per_experiment = False
+
+    print("Running testbed sweep with agent", agent_name, "and experiment group", experiment_group)
         
     if "ensemble" in agent_name:
-        max_num_samples = [10, 30]
+        max_num_samples = [30]
         single_mns_per_experiment = True
     
     if "layer_ensembles" in agent_name:
