@@ -128,7 +128,7 @@ def main(
                     for max_samples in mns_list:
 
                         # Random sets
-                        for random_samples_count in range(2, max_samples):
+                        for random_samples_count in range(2, max_samples + 1):
 
                             random_set_evaluation_seed, current_set_seed = split_seed(random_set_evaluation_seed, 2)
 
@@ -146,7 +146,7 @@ def main(
                             
                             mean_random_set_kl = sum(random_set_kls) / len(random_set_kls)
                             var_random_set_kl = sum((x - mean_random_set_kl) ** 2 for x in random_set_kls) / len(random_set_kls)
-                            
+
                             with open(
                                 f"{results_folder}/{agent_name}/random_set_results_"
                                 + experiment_group

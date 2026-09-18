@@ -57,7 +57,8 @@ class Experiment(supervised_base.BaseExperiment):
         self.rng = hk.PRNGSequence(seed)
 
         # Internalize the loss_fn
-        self._loss = jax.jit(functools.partial(loss_fn, self.enn))
+        # self._loss = jax.jit(functools.partial(loss_fn, self.enn))
+        self._loss = functools.partial(loss_fn, self.enn)
 
         # Internalize the eval datasets
         self._eval_datasets = eval_datasets

@@ -1,4 +1,4 @@
-# Layer Ensembles + Epistemic Neural Networks
+# Discrete Bayesian Neural Networks
 
 This repository contains a JAX implementation of Layer Ensembles (LEns) and [Epistemic Neural Networks](https://arxiv.org/abs/2107.08924) (ENN) experiments for the [Layer Ensembles paper](https://arxiv.org/abs/2210.04882).
 

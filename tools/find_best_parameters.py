@@ -199,7 +199,7 @@ def aggregate_agent_dataset_metric_stats(
 
 
 def load_records(results_folder: str) -> List[Dict[str, Any]]:
-    pattern = os.path.join(results_folder, "**", "*.txt")
+    pattern = os.path.join(results_folder, "*.txt")
     records: List[Dict[str, Any]] = []
 
     for file_path in tqdm(glob.glob(pattern, recursive=True), desc="Loading records"):
@@ -781,10 +781,11 @@ def analyze_agent_records(
 
     print(f"\nAnalyzing agent '{agent}' -> {agent_output_dir}")
 
-    best_val_loss = best_rows_by_metric(agent_records, "val_loss")
-    best_val_kl = best_rows_by_metric(agent_records, "val_kl")
-    stats_val_loss = aggregate_agent_dataset_metric_stats(agent_records, "val_loss")
-    stats_val_kl = aggregate_agent_dataset_metric_stats(agent_records, "val_kl")
+    grouped_records_loss = aggregate_rows_across_datasets(agent_records, "val_loss")
+    grouped_records_kl = aggregate_rows_across_datasets(agent_records, "val_kl")
+
+    best_val_loss = best_rows_by_metric(grouped_records_loss, "val_loss")
+    best_val_kl = best_rows_by_metric(grouped_records_kl, "val_kl")
 
     if not best_val_loss:
         print(f"Warning: no rows with val_loss were found for agent '{agent}'.")
@@ -799,34 +800,15 @@ def analyze_agent_records(
     write_rows_csv(best_val_kl, best_val_kl_path)
 
     top_val_loss = top_rows_by_metric_per_agent(
-        agent_records, "val_loss", top_n=top_n_best
+        grouped_records_loss, "val_loss", top_n=top_n_best
     )
-    top_val_kl = top_rows_by_metric_per_agent(agent_records, "val_kl", top_n=top_n_best)
+    top_val_kl = top_rows_by_metric_per_agent(grouped_records_kl, "val_kl", top_n=top_n_best)
     top_val_loss = add_model_parameters_column(top_val_loss)
     top_val_kl = add_model_parameters_column(top_val_kl)
     top_val_loss_path = os.path.join(agent_output_dir, "top5_by_val_loss.csv")
     top_val_kl_path = os.path.join(agent_output_dir, "top5_by_val_kl.csv")
     write_rows_csv(top_val_loss, top_val_loss_path)
     write_rows_csv(top_val_kl, top_val_kl_path)
-
-    rows_val_loss_stats = [
-        {
-            "agent": agent_name,
-            **values,
-        }
-        for agent_name, values in sorted(stats_val_loss.items(), key=lambda x: x[0])
-    ]
-    rows_val_kl_stats = [
-        {
-            "agent": agent_name,
-            **values,
-        }
-        for agent_name, values in sorted(stats_val_kl.items(), key=lambda x: x[0])
-    ]
-    val_loss_stats_path = os.path.join(agent_output_dir, "agent_dataset_stats_val_loss.csv")
-    val_kl_stats_path = os.path.join(agent_output_dir, "agent_dataset_stats_val_kl.csv")
-    write_rows_csv(rows_val_loss_stats, val_loss_stats_path)
-    write_rows_csv(rows_val_kl_stats, val_kl_stats_path)
 
     print(f"Loaded {len(agent_records)} result rows for agent '{agent}'")
 
@@ -858,35 +840,9 @@ def analyze_agent_records(
         print(f"Saved: {best_val_kl_path}")
         print(f"Saved: {top_val_loss_path}")
         print(f"Saved: {top_val_kl_path}")
-        print(f"Saved: {val_loss_stats_path}")
-        print(f"Saved: {val_kl_stats_path}")
         print(f"Saved: {influence_path}")
         for plot_file in plot_files:
             print(f"Saved: {plot_file}")
-
-    print("Top results by val_loss (per agent):")
-    for row in top_val_loss:
-        agent_name = str(row.get("agent", "unknown"))
-        variance = stats_val_loss.get(agent_name, {}).get("val_loss_dataset_variance", math.nan)
-        print(
-            f"  {agent_name} #{int(row.get('rank_within_agent', -1))}: "
-            + f"val_loss={float(row['val_loss']):.6g} "
-            + f"kl={float(row['kl']):.6g} "
-            + f"variance={variance:.6g} "
-            + f"agent_id={row.get('agent_id', 'na')} "
-        )
-
-    print("Top results by val_kl (per agent):")
-    for row in top_val_kl:
-        agent_name = str(row.get("agent", "unknown"))
-        variance = stats_val_kl.get(agent_name, {}).get("val_kl_dataset_variance", math.nan)
-        print(
-            f"  {agent_name} #{int(row.get('rank_within_agent', -1))}: "
-            + f"val_kl={float(row['val_kl']):.6g} "
-            + f"kl={float(row['kl']):.6g} "
-            + f"variance={variance:.6g} "
-            + f"agent_id={row.get('agent_id', 'na')} "
-        )
 
     if influences:
         print("Top influential parameters:")

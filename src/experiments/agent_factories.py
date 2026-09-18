@@ -234,6 +234,7 @@ def make_ensemble_ctor(
             early_stopping_mode=early_stopping_mode,
             early_stopping_min_delta=early_stopping_min_delta,
             early_stopping_eval_freq=early_stopping_eval_freq,
+            fixed_sampler_for_training=True,
         )
 
         return config
@@ -398,6 +399,7 @@ def make_layer_ensembles_ctor(
             early_stopping_mode=early_stopping_mode,
             early_stopping_min_delta=early_stopping_min_delta,
             early_stopping_eval_freq=early_stopping_eval_freq,
+            fixed_sampler_for_training=True,
         )
 
         return config
@@ -438,9 +440,9 @@ def make_dropout_best_sweep() -> List[AgentCtorConfig]:
 
     # Adding reasonably interesting dropout agents
     for dropout_rate in [0.2]:
-        for regularization_scale in [1e-6]:
+        for regularization_scale in [1e-4]:
             for num_layers in [2]:
-                for hidden_size in [100]:
+                for hidden_size in [50]:
                     for early_stopping_mode in ["loss", "kl"]:
                         settings = {
                             "agent": "dropout",
@@ -525,100 +527,6 @@ def make_bbb_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
                             sweep.append(AgentCtorConfig(settings, config_ctor))
 
     return sweep
-
-
-# def make_bbb_selected_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
-
-#     # Adding reasonably interesting bbb agents
-#     for sigma_0 in [100, 200]:
-#         for learning_rate in [1e-3, 1e-4]:
-#             for num_layers in [2, 3]:
-#                 for hidden_size in [50, 100]:
-#                     for training_epochs in [1000, 1500]:
-#                         settings = {
-#                             "agent": "bbb",
-#                             "sigma_0": sigma_0,
-#                             "learning_rate": learning_rate,
-#                             "num_layers": num_layers,
-#                             "hidden_size": hidden_size,
-#                             "training_epochs": training_epochs,
-#                         }
-#                         config_ctor = make_bbb_ctor(
-#                             sigma_0,
-#                             learning_rate,
-#                             hidden_size,
-#                             num_layers,
-#                             training_epochs=training_epochs,
-#                             batch_size=1000 if reduce_batch else None,
-#                         )
-#                         sweep.append(AgentCtorConfig(settings, config_ctor))
-
-#     return sweep
-
-
-# def make_bbb_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
-
-#     # Adding reasonably interesting bbb agents
-#     for sigma_0 in [100]:
-#         for learning_rate in [1e-3]:
-#             for num_layers in [2]:
-#                 for hidden_size in [50]:
-#                     for training_epochs in [1000]:
-#                         settings = {
-#                             "agent": "bbb",
-#                             "sigma_0": sigma_0,
-#                             "learning_rate": learning_rate,
-#                             "num_layers": num_layers,
-#                             "hidden_size": hidden_size,
-#                             "training_epochs": training_epochs,
-#                         }
-#                         config_ctor = make_bbb_ctor(
-#                             sigma_0,
-#                             learning_rate,
-#                             hidden_size,
-#                             num_layers,
-#                             training_epochs=training_epochs,
-#                             batch_size=1000 if reduce_batch else None,
-#                         )
-#                         sweep.append(AgentCtorConfig(settings, config_ctor))
-
-#     return sweep
-
-
-# def make_bbb_debug(reduce_batch=False) -> List[AgentCtorConfig]:
-#     """Generates the benchmark sweep for paper results."""
-#     sweep = []
-
-#     # Adding reasonably interesting bbb agents
-#     for sigma_0 in [100]:
-#         for learning_rate in [1e-3]:
-#             for num_layers in [2]:
-#                 for hidden_size in [50]:
-#                     for training_epochs in [1000]:
-#                         settings = {
-#                             "agent": "bbb",
-#                             "sigma_0": sigma_0,
-#                             "learning_rate": learning_rate,
-#                             "num_layers": num_layers,
-#                             "hidden_size": hidden_size,
-#                             "training_epochs": training_epochs,
-#                         }
-#                         config_ctor = make_bbb_ctor(
-#                             sigma_0,
-#                             learning_rate,
-#                             hidden_size,
-#                             num_layers,
-#                             training_epochs=training_epochs,
-#                             batch_size=1000 if reduce_batch else None,
-#                             num_index_samples=64,
-#                         )
-#                         sweep.append(AgentCtorConfig(settings, config_ctor))
-
-#     return sweep
 
 
 def make_ensemble_sweep() -> List[AgentCtorConfig]:
@@ -746,11 +654,11 @@ def make_hypermodel_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]:
 
     # Adding reasonably interesting hypermodel agents
     for index_dim in [20]:
-        for noise_scale in [1]:
+        for noise_scale in [0]:
             for prior_scale in [0]:
                 for num_layers in [2]:
                     for hidden_size in [50]:
-                        for early_stopping_mode in ["kl"]:
+                        for early_stopping_mode in ["loss", "kl"]:
                             settings = {
                                 "agent": "hypermodel",
                                 "index_dim": index_dim,
@@ -1031,8 +939,6 @@ def make_agent_sweep(
         agent_sweep = make_bbb_sweep(reduce_batch=reduce_batch)
     elif agent == "bbb_best":
         agent_sweep = make_bbb_best_sweep(reduce_batch=reduce_batch)
-    elif agent == "bbb_debug":
-        agent_sweep = make_bbb_debug()
     elif agent == "ensemble":
         agent_sweep = make_ensemble_sweep()
     elif agent == "ensemble_best":

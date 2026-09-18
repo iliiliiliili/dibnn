@@ -1,3 +1,4 @@
+import csv
 import os
 
 from plotnine import (
@@ -21,12 +22,15 @@ from plotnine import (
 )
 from plotnine.data import economics
 from pandas import Categorical, DataFrame, read_csv
+import pandas as pd
 from plotnine.scales.limits import ylim
 from plotnine.scales.scale_xy import scale_x_discrete
 from plotnine.guides import guide_axis, guide_legend, guide
 from glob import glob
 import re
 from fire import Fire
+from tabulate import tabulate, SEPARATING_LINE
+import numpy as np
 
 limit_std = 1000
 
@@ -34,18 +38,6 @@ tex_template_file = "tools/tex_table_template.tex"
 
 with open(tex_template_file, "r") as f:
     tex_template = f.read()
-
-# files = glob("results_vnn_selected*")
-# files = glob("results/results_*")
-# files = glob("results/results_*layer*")
-# files = glob("results_all_old*") + glob("results_vnn_selected*")
-# files = glob("results_mserr*") + glob("results_lrelu*")
-# files = glob("results/results_best_selected_val_*") + glob("results/results_mserr*")
-# files = glob("results/results_mserr_layer_ensemble*")
-# files = glob("results/results_best_selected_val_*") + glob("results/results_multi_indexed_val_*")
-# files = glob("results/results_batched_multi_indexed_val_*")
-# files = glob("results/results_ranked_batched_multi_indexed_val_*")
-# files = glob("results1/results_best_selected_val_true_layer_ensemble_einsum_cor*")
 
 float_fields = [
     "val_kl",
@@ -1324,6 +1316,8 @@ def plot_ranked_ensemble_summary(
     y_limit=(0.1, 100),
 ):
 
+    os.makedirs("plots", exist_ok=True)
+
     all_agent_frames = {}
     all_experiment_params = {}
     all_experiment_files = {}
@@ -2240,10 +2234,10 @@ def create_ranked_dbnn_plots(
     if agents == "all" or "dropout" in agents:
         create_ranked_dropout_plots(
             num_samples=num_samples,
+            is_randomset=is_randomset,
             summary_input_dims=summary_input_dims,
             results_folder=results_folder,
             is_log_likelihood=is_log_likelihood,
-            is_randomset=is_randomset,
             allowed_data_ratios=allowed_data_ratios,
             **extra_params,
         )
@@ -2397,6 +2391,519 @@ def create_all_combined_ranked_dbnn_plots(
         is_log_likelihood=True,
         allowed_data_ratios=allowed_data_ratios,
     )
+
+def interquantile_range(frame: DataFrame, column: str, q1: float = 0.25, q3: float = 0.75) -> float:
+    """
+    Calculate the interquantile range of a given column in a DataFrame.
+
+    Parameters:
+    - frame: DataFrame containing the data.
+    - column: Name of the column for which to calculate the interquantile range.
+    - q1: Lower quantile (default is 0.25).
+    - q3: Upper quantile (default is 0.75).
+
+    Returns:
+    - The interquantile range (IQR) of the specified column.
+    """
+    lower_quantile = frame[column].quantile(q1)
+    upper_quantile = frame[column].quantile(q3)
+    return upper_quantile - lower_quantile
+
+
+def create_ranked_discrete_model_data(
+    files,
+    allowed_input_dims,
+    parse_experiment_parameters=parse_enn_experiment_parameters,
+    allowed_max_num_samples=None,
+    allowed_data_ratios=None,
+    is_log_likelihood=False,
+    is_randomset=False,
+    verbose=False,
+    failure_ranked_kl_limit=5.0, # if ranking KL is above this limit, we consider the algorithm to have failed, cannot be inside IQR
+    best_indexers_by_val=None, # used for randomset @ calibrated samples
+):
+
+    os.makedirs("plots", exist_ok=True)
+
+    all_agent_frames = {}
+    all_experiment_params = {}
+    all_experiment_files = {}
+
+    max_num_samples = None
+
+    for file in files:
+        agent_frames = read_data(file)
+        experiment_params = parse_experiment_parameters(file, True)
+
+        if experiment_params["input_dim"] not in allowed_input_dims:
+
+            if verbose:
+                print("Skipping file", file, "due to input dim filter")
+            else:
+                print(".", end="", flush=True)
+            continue
+
+        if (allowed_data_ratios is not None) and (
+            experiment_params["data_ratio"] not in allowed_data_ratios
+        ):
+            if verbose:
+                print("Skipping file", file, "due to data ratio filter")
+            else:
+                print(".", end="", flush=True)
+            continue
+
+        if (allowed_max_num_samples is not None) and (
+            experiment_params["max_num_samples"] not in allowed_max_num_samples
+        ):
+            if verbose:
+                print("Skipping file", file, "due to allowed_max_num_samples filter")
+            else:
+                print(".", end="", flush=True)
+            continue
+
+
+        if len(agent_frames.keys()) == 0:
+            raise ValueError("No agent frames found in file " + file)
+
+        if verbose:
+            print("Frame", {k: len(v) for k, v in agent_frames.items()}, "from file", file)
+
+        if experiment_params["max_num_samples"] is not None:
+            max_num_samples = experiment_params["max_num_samples"]
+
+        for agent in agent_frames.keys():
+
+            frame = agent_frames[agent]
+
+            if agent not in all_agent_frames:
+                all_agent_frames[agent] = []
+                all_experiment_params[agent] = []
+                all_experiment_files[agent] = []
+
+            all_agent_frames[agent].append(frame)
+            all_experiment_params[agent].append(experiment_params)
+            all_experiment_files[agent].append(file)
+
+    for agent, all_frames in all_agent_frames.items():
+
+        if agent not in summary_select_agent_params_best:
+            if verbose:
+                print(f"Skipping agent {agent} due to summary_select_agent_params filter")
+            continue
+
+        params = agent_plot_params[agent]
+        filter = summary_select_agent_params_best[agent][0]
+
+        frames = all_frames
+
+        for key, value in filter.items():
+
+            if key == "agent_suffix":
+                agent_suffix = value
+                continue
+
+            if key == "max_num_samples":
+                if max_num_samples is None:
+                    raise ValueError(
+                        "max_num_samples is not set in the experiment parameters"
+                    )
+                if value[0] != max_num_samples:
+                    raise ValueError(f"Empty frame after filtering for {key}={value}")
+                continue
+
+            if len(value) == 0:
+                continue
+
+            old_frames = frames
+            frames = [f[f[key].isin(value)] for f in frames]
+            if len(frames[0]) <= 0:
+                raise ValueError(f"Empty frame after filtering for {key}={value}")
+
+        frame_sizes = [len(f) for f in frames]
+        assert len(set(frame_sizes)) == 1, f"Frames have different sizes: {frame_sizes}"
+
+        frame_by_indexer = pd.concat(frames, ignore_index=True).groupby("indexer")
+        indexer_frames = [frame_by_indexer.get_group(i) for i in frame_by_indexer.groups.keys()]
+        indexer_means = [f[params["y"]].mean() for f in indexer_frames]
+        indexer_medians = [f[params["y"]].median() for f in indexer_frames]
+        indexer_vars = [f[params["y"]].var() for f in indexer_frames]
+        indexer_iqrs = [interquantile_range(f, params["y"]) for f in indexer_frames]
+        min_indexer = min(frame_by_indexer.groups.keys())
+
+        if is_randomset:
+
+            random_kl_of_calibrated_samples = [f[params["y"]].values[idx - min_indexer] for f, idx in zip(frames, best_indexers_by_val)]
+            mean_random_kl_of_calibrated_samples = sum(random_kl_of_calibrated_samples) / len(random_kl_of_calibrated_samples)
+            median_random_kl_of_calibrated_samples = np.median(random_kl_of_calibrated_samples)
+            var_random_kl_of_calibrated_samples = sum((y - mean_random_kl_of_calibrated_samples) ** 2 for y in random_kl_of_calibrated_samples) / len(random_kl_of_calibrated_samples)
+            iqr_random_kl_of_calibrated_samples = interquantile_range(pd.DataFrame({params["y"]: random_kl_of_calibrated_samples}), params["y"])
+
+
+            return indexer_means, indexer_medians, indexer_vars, indexer_iqrs, min_indexer, mean_random_kl_of_calibrated_samples, median_random_kl_of_calibrated_samples, var_random_kl_of_calibrated_samples, iqr_random_kl_of_calibrated_samples
+        if is_log_likelihood:
+            best_lines_by_val = [f.nlargest(1, params["val_ll_y"]) for f in frames]
+        else:
+            best_lines_by_val = [f.nsmallest(1, params["val_y"]) for f in frames]
+
+
+        best_lines_by_test = [f.nsmallest(1, params["y"]) for f in frames]
+
+        best_frame_by_val = pd.concat(best_lines_by_val, ignore_index=True)
+        best_frame_by_test = pd.concat(best_lines_by_test, ignore_index=True)
+
+        mean_best_kl_by_val = best_frame_by_val[params["y"]].mean()
+        mean_best_kl_by_test = best_frame_by_test[params["y"]].mean()
+        mean_best_val_by_val = best_frame_by_val[params["val_ll_y" if is_log_likelihood else "val_y"]].mean()
+        mean_best_val_by_test = best_frame_by_test[params["val_ll_y" if is_log_likelihood else "val_y"]].mean()
+
+        var_best_kl_by_val = best_frame_by_val[params["y"]].var()
+        var_best_kl_by_test = best_frame_by_test[params["y"]].var()
+        var_best_val_by_val = best_frame_by_val[params["val_ll_y" if is_log_likelihood else "val_y"]].var()
+        var_best_val_by_test = best_frame_by_test[params["val_ll_y" if is_log_likelihood else "val_y"]].var()
+
+        iqr_best_kl_by_val = interquantile_range(best_frame_by_val, params["y"])
+        iqr_best_kl_by_test = interquantile_range(best_frame_by_test, params["y"])
+        iqr_best_val_by_val = interquantile_range(best_frame_by_val, params["val_ll_y" if is_log_likelihood else "val_y"])
+        iqr_best_val_by_test = interquantile_range(best_frame_by_test, params["val_ll_y" if is_log_likelihood else "val_y"])
+        iqr_best_indexer_by_val = interquantile_range(best_frame_by_val, "indexer")
+        iqr_best_indexer_by_test = interquantile_range(best_frame_by_test, "indexer")
+
+        median_best_kl_by_val = best_frame_by_val[params["y"]].median()
+        median_best_kl_by_test = best_frame_by_test[params["y"]].median()
+        median_best_val_by_val = best_frame_by_val[params["val_ll_y" if is_log_likelihood else "val_y"]].median()
+        median_best_val_by_test = best_frame_by_test[params["val_ll_y" if is_log_likelihood else "val_y"]].median()
+
+        median_best_indexer_by_val = best_frame_by_val["indexer"].median()
+        median_best_indexer_by_test = best_frame_by_test["indexer"].median()
+
+        # if iqr_best_kl_by_val + median_best_kl_by_val > failure_ranked_kl_limit:
+        #     raise ValueError(f"Ranked KL is above the failure limit of {failure_ranked_kl_limit}, cannot be inside IQR: {iqr_best_kl_by_val + median_best_kl_by_val}")
+
+        failure_count_val = sum(best_frame_by_val[params["y"]] > failure_ranked_kl_limit)
+        failure_count_test = sum(best_frame_by_test[params["y"]] > failure_ranked_kl_limit)
+
+        failure_rate_val = failure_count_val / len(best_frame_by_val)
+        failure_rate_test = failure_count_test / len(best_frame_by_test)
+
+        result_by_val = {
+
+            "mean_best_kl": mean_best_kl_by_val,
+            "mean_best_val": mean_best_val_by_val,
+            "median_best_indexer": median_best_indexer_by_val,
+            "median_best_kl": median_best_kl_by_val,
+            "median_best_val": median_best_val_by_val,
+            "var_best_kl": var_best_kl_by_val,
+            "var_best_val": var_best_val_by_val,
+            "iqr_best_kl": iqr_best_kl_by_val,
+            "iqr_best_val": iqr_best_val_by_val,
+            "failure_count": failure_count_val,
+            "failure_rate": failure_rate_val,
+            "iqr_best_indexer": iqr_best_indexer_by_val,
+        }
+
+        result_by_test = {
+            "mean_best_kl": mean_best_kl_by_test,
+            "mean_best_val": mean_best_val_by_test,
+            "median_best_indexer": median_best_indexer_by_test,
+            "median_best_kl": median_best_kl_by_test,
+            "median_best_val": median_best_val_by_test,
+            "var_best_kl": var_best_kl_by_test,
+            "var_best_val": var_best_val_by_test,
+            "iqr_best_kl": iqr_best_kl_by_test,
+            "iqr_best_val": iqr_best_val_by_test,
+            "failure_count": failure_count_test,
+            "failure_rate": failure_rate_test,
+            "iqr_best_indexer": iqr_best_indexer_by_test,
+        }
+
+        if not verbose:
+            print()
+
+        best_indexers_by_val = [*best_frame_by_val["indexer"]]
+
+        return result_by_val, result_by_test, best_indexers_by_val, indexer_medians, indexer_iqrs
+
+    raise ValueError("No agent frames found after filtering")
+
+
+def create_ranked_agent_data(
+    file_filter,
+    agent,
+    num_samples=100,
+    summary_input_dims=[[10, 100, 1000]],
+    results_folder="results",
+    is_log_likelihood=False,
+    is_randomset=False,
+    allowed_data_ratios=None,
+    early_stopping_mode="kl",
+    verbose=False,
+    best_indexers_by_val=None,
+):
+
+    global summary_select_agent_params
+    summary_select_agent_params = {}
+
+    file_prefix = ""
+
+    if is_randomset:
+        file_prefix = "_randomset.txt"
+    else:
+        file_prefix = "_ll.txt" if is_log_likelihood else "_kl.txt"
+
+    files = glob(
+        results_folder
+        + "/"
+        + file_filter
+        + file_prefix
+    )
+    summary_select_agent_params_best[agent][0]["max_num_samples"] = [num_samples]
+    summary_select_agent_params_best[agent][0]["early_stopping_mode"] = [early_stopping_mode]
+
+    data = {}
+
+    for ids in summary_input_dims:
+        data[str(ids)] = create_ranked_discrete_model_data(
+            files,
+            ids,
+            allowed_max_num_samples=[num_samples],
+            is_log_likelihood=is_log_likelihood,
+            allowed_data_ratios=allowed_data_ratios,
+            is_randomset=is_randomset,
+            verbose=verbose,
+            best_indexers_by_val=best_indexers_by_val,
+        )
+
+    return data
+
+
+def create_ranked_dbnn_tables(
+    max_num_samples=(100,1000),
+    max_num_samples_lens=27,
+    max_num_samples_ens=30,
+    summary_input_dims=[[10, 100], [1, 10, 100], [1]],
+    agents=["vnn", "dropout", "bbb", "hypermodel", "ensemble", "layer_ensembles"],
+    results_folder="results-discrete",
+    file_filter=None,
+    allowed_data_ratios=None,
+    verbose=False,
+    table_folder="./tables",
+    samples_table_count=20,
+):
+
+    os.makedirs(table_folder, exist_ok=True)
+
+    extra_params = {}
+
+    if file_filter is not None:
+        extra_params["file_filter"] = file_filter
+
+    agent_presenting_name = {
+        "vnn": "VNN",
+        "dropout": "MCD",
+        "bbb": "BBB",
+        "hypermodel": "Hypermodel",
+        "ensemble": "Ensemble",
+        "layer_ensembles": "Layer Ensembles",
+    }
+
+    table_mean_header = [
+        "Agent", "Mean Calibrated KL ± Var", "Mean Best KL ± Var", "Median Calibrated Samples ± IQR",
+        "Median Best Samples ± IQR", "Failure %", "Max Samples",
+        "Mean Random Set KL ± Var @ Calibrated Samples", "Mean Random Set KL ± Var @ Max Samples",
+    ]
+    table_median_header = [
+        "Model", "Calibrated KL", "Best KL", "Calibrated Samples",
+        "Best Samples", "Failure %", "Max Samples",
+        "Random Set KL\\\\@ Calibrated Samples", "Random Set KL\\\\@ Max Samples",
+    ]
+
+    table_comparison_by_samples_ensemble_header = [
+        "Agent", "Samples", "Median KL Ranked ± IQR", "Median KL Random ± IQR"
+    ]
+    table_comparison_by_samples_continuous_header = [
+        "Agent", "Samples", "KL Ranked", "KL Random"
+    ]
+
+    for ids in summary_input_dims:
+        for num_samples in max_num_samples:
+            for is_log_likelihood in [True, False]:
+
+                table_mean_data = []
+                table_median_data = []
+                sort_values_mean = []
+                sort_values_median = []
+                table_comparison_by_samples_ensemble_data = []
+                table_comparison_by_samples_continuous_data = []
+
+
+                for agent in agents:
+
+                    current_num_samples = num_samples
+
+                    if agent == "layer_ensembles":
+                        current_num_samples = max_num_samples_lens
+                    elif agent == "ensemble":
+                        current_num_samples = max_num_samples_ens
+
+                    
+                    sample_steps = (
+                        [int((current_num_samples // 4) / (samples_table_count // 2) * i) for i in range(1, (samples_table_count // 2) + 1)] +
+                        [int((current_num_samples // 4) + (current_num_samples - (current_num_samples // 4)) / (samples_table_count // 2) * i) for i in range(1, (samples_table_count // 2) + 1)]
+                    )
+
+                    result_by_val, result_by_test, best_indexers_by_val, indexer_medians, indexer_iqrs = create_ranked_agent_data(
+                        agent=agent,
+                        file_filter="results_" + agent + "*",
+                        num_samples=current_num_samples,
+                        summary_input_dims=summary_input_dims,
+                        results_folder=results_folder,
+                        is_log_likelihood=is_log_likelihood,
+                        is_randomset=False,
+                        allowed_data_ratios=allowed_data_ratios,
+                        verbose=verbose,
+                        **extra_params,
+                    )[str(ids)]
+
+                    (
+                        randomset_indexer_means, randomset_indexer_medians, randomset_indexer_vars, randomset_indexer_iqrs,
+                        min_indexer, mean_random_kl_of_calibrated_samples, median_random_kl_of_calibrated_samples,
+                        var_random_kl_of_calibrated_samples, iqr_random_kl_of_calibrated_samples
+                    ) = create_ranked_agent_data(
+                        agent=agent,
+                        file_filter="results_" + agent + "*",
+                        num_samples=current_num_samples,
+                        summary_input_dims=summary_input_dims,
+                        results_folder=results_folder,
+                        is_log_likelihood=is_log_likelihood,
+                        is_randomset=True,
+                        allowed_data_ratios=allowed_data_ratios,
+                        verbose=verbose,
+                        best_indexers_by_val=best_indexers_by_val,
+                        **extra_params,
+                    )[str(ids)]
+
+                    sort_values_mean.append(result_by_val["mean_best_kl"])
+                    sort_values_median.append(result_by_val["median_best_kl"])
+                    agent_name = agent_presenting_name.get(agent, agent)
+
+                    table_mean_data.append([
+                        agent_name,
+                        f"{result_by_val['mean_best_kl']:.2f} ± {result_by_val['var_best_kl']:.2f}",
+                        f"{result_by_test['mean_best_kl']:.2f} ± {result_by_test['var_best_kl']:.2f}",
+                        f"{result_by_val['median_best_indexer']:.1f} ± {result_by_val['iqr_best_indexer']:.1f}",
+                        f"{result_by_test['median_best_indexer']:.1f} ± {result_by_test['iqr_best_indexer']:.1f}",
+                        f"{(100 * result_by_val['failure_rate']):.1f}%",
+                        f"{current_num_samples}",
+                        f"{mean_random_kl_of_calibrated_samples:.2f} ± {var_random_kl_of_calibrated_samples:.2f}",
+                        f"{randomset_indexer_means[-1]:.2f} ± {randomset_indexer_vars[-1]:.2f}"
+                    ])
+
+                    table_median_data.append([
+                        agent_name,
+                        f"{result_by_val['median_best_kl']:.2f} ± {result_by_val['iqr_best_kl']:.2f}",
+                        f"{result_by_test['median_best_kl']:.2f} ± {result_by_test['iqr_best_kl']:.2f}",
+                        f"{result_by_val['median_best_indexer']:.1f} ± {result_by_val['iqr_best_indexer']:.1f}",
+                        f"{result_by_test['median_best_indexer']:.1f} ± {result_by_test['iqr_best_indexer']:.1f}",
+                        f"{(100 * result_by_val['failure_rate']):.1f}%",
+                        f"{current_num_samples}",
+                        f"{median_random_kl_of_calibrated_samples:.2f} ± {iqr_random_kl_of_calibrated_samples:.2f}",
+                        f"{randomset_indexer_medians[-1]:.2f} ± {randomset_indexer_iqrs[-1]:.2f}",
+                    ])
+
+                    for sample in sample_steps:
+                        if sample < min_indexer:
+                            continue
+
+                        if agent in ["ensemble", "layer_ensembles"]:
+                            table_comparison_by_samples_ensemble_data.append([
+                                agent_name,
+                                sample,
+                                f"{indexer_medians[sample - min_indexer]:.2f} ± {indexer_iqrs[sample - min_indexer]:.2f}",
+                                f"{randomset_indexer_medians[sample - min_indexer]:.2f} ± {randomset_indexer_iqrs[sample - min_indexer]:.2f}",
+                            ])
+                        else:
+                            table_comparison_by_samples_continuous_data.append([
+                                agent_name,
+                                sample,
+                                f"{indexer_medians[sample - min_indexer]:.2f} ± {indexer_iqrs[sample - min_indexer]:.2f}",
+                                f"{randomset_indexer_medians[sample - min_indexer]:.2f} ± {randomset_indexer_iqrs[sample - min_indexer]:.2f}",
+                            ])
+
+
+                table_mean_data = [x for _, x in sorted(zip(sort_values_mean, table_mean_data), key=lambda pair: pair[0])]
+                table_median_data = [x for _, x in sorted(zip(sort_values_median, table_median_data), key=lambda pair: pair[0])]
+
+                table_mean = tabulate(table_mean_data, headers=table_mean_header, tablefmt="grid")
+                table_median = tabulate(table_median_data, headers=table_median_header, tablefmt="grid")
+                table_comparison_by_samples_ensemble = tabulate(table_comparison_by_samples_ensemble_data, headers=table_comparison_by_samples_ensemble_header, tablefmt="grid")
+                table_comparison_by_samples_continuous = tabulate(table_comparison_by_samples_continuous_data, headers=table_comparison_by_samples_continuous_header, tablefmt="grid")
+
+                transposed_table_mean = tabulate(list(zip(*[table_mean_header, *table_mean_data])), tablefmt="grid")
+                transposed_table_median = tabulate(list(zip(*[table_median_header, *table_median_data])), tablefmt="grid")
+
+                print(f"Mean Results for input dims {ids} based on {'Log Likelihood' if is_log_likelihood else 'KL'}:")
+                # print(table_mean)
+                print(transposed_table_mean)
+
+                print()
+                print(f"Median Results for input dims {ids} based on {'Log Likelihood' if is_log_likelihood else 'KL'}:")
+                # print(table_median)
+                print(transposed_table_median)
+
+                print()
+                print(f"Comparison by Samples (Ensemble) for input dims {ids} based on {'Log Likelihood' if is_log_likelihood else 'KL'}:")
+                print(table_comparison_by_samples_ensemble)
+
+                print()
+                print(f"Comparison by Samples (Continuous) for input dims {ids} based on {'Log Likelihood' if is_log_likelihood else 'KL'}:")
+                print(table_comparison_by_samples_continuous)
+
+                print()
+
+                table_mean_latex = tabulate(table_mean_data, headers=table_mean_header, tablefmt="latex")
+                table_median_latex = tabulate(table_median_data, headers=table_median_header, tablefmt="latex")
+                transposed_table_mean_latex = tabulate(list(zip(*[table_mean_header, *table_mean_data])), tablefmt="latex")
+                transposed_table_median_latex = tabulate(list(zip(*[table_median_header, *table_median_data])), tablefmt="latex")
+                table_comparison_by_samples_ensemble_latex = tabulate(table_comparison_by_samples_ensemble_data, headers=table_comparison_by_samples_ensemble_header, tablefmt="latex")
+                table_comparison_by_samples_continuous_latex = tabulate(table_comparison_by_samples_continuous_data, headers=table_comparison_by_samples_continuous_header, tablefmt="latex")
+
+                with open(f"{table_folder}/ranked_dbnn_table_mean_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.tex", "w") as f:
+                    f.write(transposed_table_mean_latex)
+                
+                with open(f"{table_folder}/ranked_dbnn_table_median_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.tex", "w") as f:
+                    f.write(transposed_table_median_latex)
+                
+                with open(f"{table_folder}/ranked_dbnn_table_comparison_by_samples_ensemble_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.tex", "w") as f:
+                    f.write(table_comparison_by_samples_ensemble_latex)
+
+                with open(f"{table_folder}/ranked_dbnn_table_comparison_by_samples_continuous_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.tex", "w") as f:
+                    f.write(table_comparison_by_samples_continuous_latex)
+
+                with open(f"{table_folder}/ranked_dbnn_table_mean_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.csv", "w") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(table_mean_header)
+                    writer.writerows(table_mean_data)
+
+                with open(f"{table_folder}/ranked_dbnn_table_median_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.csv", "w") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(table_median_header)
+                    writer.writerows(table_median_data)
+
+                with open(f"{table_folder}/ranked_dbnn_table_comparison_by_samples_ensemble_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.csv", "w") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(table_comparison_by_samples_ensemble_header)
+                    writer.writerows(table_comparison_by_samples_ensemble_data)
+
+                with open(f"{table_folder}/ranked_dbnn_table_comparison_by_samples_continuous_{'_'.join(map(str, ids))}_mns{num_samples}_{'ll' if is_log_likelihood else 'kl'}.csv", "w") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(table_comparison_by_samples_continuous_header)
+                    writer.writerows(table_comparison_by_samples_continuous_data)
+
+                print()
+
+            print()
+
+    print()
 
 
 if __name__ == "__main__":

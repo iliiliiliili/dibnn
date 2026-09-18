@@ -67,7 +67,7 @@ def gaussian_regression_loss(
             batch: enn_base.Batch,
             key: enn_base.RngKey,
             device: str,
-            correlated_index: bool = False,
+            correlated_index: bool = True,
             replace_indices = None
         ) -> Tuple[torch.Tensor, enn_base.LossMetrics]:
 

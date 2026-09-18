@@ -19,6 +19,7 @@
 import random
 from typing import List
 import fire
+import torch
 from tqdm import tqdm
 
 from src.experiments import agent_factories
@@ -75,6 +76,18 @@ def single_run(
         evaluate_quality_val_fn=problem.evaluate_quality_val,
     )
 
+    if agent.config.fixed_sampler_for_training:
+
+        sampler = enn_sampler_fixed
+
+        def fixed_sampler(x: torch.Tensor, seed: int = 0, num_samples: int = 1) -> torch.Tensor:
+            all_indices = agent.create_all_indices(num_samples, seed, device)
+            result = sampler(x, all_indices)
+            return result
+            
+        enn_sampler_free = fixed_sampler
+
+
     if agent_config.settings["agent"] in ["layer_ensembles", "ensemble"]:
         # mns_list = [agent_config.settings["max_num_samples"]]
         mns_list = [*max_num_samples]
@@ -84,6 +97,8 @@ def single_run(
     for max_samples in mns_list:
         # Evaluate the quality of the ENN sampler after training
 
+        all_randomset_kls = {}
+
         with open(
             results_file_prefix
             + "mns"
@@ -92,6 +107,7 @@ def single_run(
             "w",
         ) as f:
 
+            # for random_samples_count in range(max_samples, max_samples + 1):
             for random_samples_count in range(2, max_samples + 1):
 
                 random_set_evaluation_seed, current_set_seed = split_seed(random_set_evaluation_seed, 2)
@@ -110,7 +126,13 @@ def single_run(
                 
                 mean_random_set_kl = sum(random_set_kls) / len(random_set_kls)
                 var_random_set_kl = sum((x - mean_random_set_kl) ** 2 for x in random_set_kls) / len(random_set_kls)
-            
+
+                all_randomset_kls[random_samples_count] = {
+                    "mean_kl": mean_random_set_kl,
+                    "var_kl": var_random_set_kl,
+                    "kl_values": random_set_kls,    
+                }
+
                 f.write(
                     str(agent_id)
                     + " "
@@ -553,7 +575,7 @@ def main(
                     print(
                         "Created problem for ind", ind, "dr", dr, "ns", ns, "seed", seed
                     )
-                
+
                 reduce_batch = ind in reduce_batch_dims
 
                 sweep = agent_factories.load_agent_config_sweep(agent_name, reduce_batch=reduce_batch)

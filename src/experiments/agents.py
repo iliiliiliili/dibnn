@@ -43,7 +43,7 @@ class VanillaEnnConfig:
     enn_ctor: enn_losses.EnnCtor
     loss_ctor: enn_losses.LossCtor
     log_likelihood_ctor: bool = False
-    optimizer_ctor: Callable = None  # Function returning torch optimizer
+    optimizer_ctor: Callable = None
     training_epochs: Optional[int] = 1000
     batch_size: Optional[int] = None
     eval_batch_size: Optional[int] = None
@@ -59,6 +59,7 @@ class VanillaEnnConfig:
     early_stopping_mode: str = "loss"
     early_stopping_min_delta: float = 0.0
     early_stopping_eval_freq: Optional[int] = None
+    fixed_sampler_for_training: bool = False
 
     def __post_init__(self):
         if self.optimizer_ctor is None:
@@ -128,8 +129,13 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         eval_seed: int,
         device: str,
         metric: str,
+        num_samples: Optional[int] = None,
     ) -> float:
         """Evaluate validation metric used by early stopping."""
+
+        if num_samples is None:
+            num_samples = self.config.max_num_samples
+
         with torch.no_grad():
             if metric == "loss":
 
@@ -144,8 +150,20 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
                 return total_loss / total_batches
             elif metric == "kl":
 
-                val_sampler = extract_enn_sampler(model, enn, device)
-                kl_quality = evaluate_quality_val_fn(val_sampler, eval_seed, device=device)
+                if self.config.fixed_sampler_for_training:
+
+                    sampler = extract_fixed_enn_sampler(model, enn, device)
+
+                    def fixed_sampler(x: torch.Tensor, seed: int = 0, num_samples: int = 1) -> torch.Tensor:
+                        all_indices = self.create_all_indices(num_samples, seed, device)
+                        result = sampler(x, all_indices)
+                        return result
+                        
+                    val_sampler = fixed_sampler
+                else:
+                    val_sampler = extract_enn_sampler(model, enn, device)
+
+                kl_quality = evaluate_quality_val_fn(val_sampler, eval_seed, num_samples=num_samples, device=device)
 
                 return kl_quality.kl_estimate
             else: 
@@ -314,7 +332,7 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         if self.fixed_sampler:
             sampler = (extract_fixed_enn_sampler(model, enn, device), extract_enn_sampler(model, enn, device))
         else:
-            extract_enn_sampler(model, enn, device)
+            sampler = extract_enn_sampler(model, enn, device)
 
 
         val_loss = self._evaluate_validation_metric(
@@ -348,5 +366,5 @@ class VanillaEnnAgent(testbed_base.TestbedAgent):
         device: str = "cuda:0",
     ) -> torch.Tensor:
         """Create all indices for fixed sampler."""
-        indices = self.enn.indexer.batched(seed, max_samples, device)
+        indices = self.enn.indexer.batched(seed, max_samples, device, correlated_index=True)
         return indices
