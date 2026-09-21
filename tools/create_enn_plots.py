@@ -19,6 +19,7 @@ from plotnine import (
     xlab,
     scale_color_discrete,
     labeller,
+    guide_legend as legend_guide
 )
 from plotnine.data import economics
 from pandas import Categorical, DataFrame, read_csv
@@ -1545,14 +1546,15 @@ def plot_ranked_ensemble_summary(
             size=0.6,
             alpha=0.6,
         )
-        + geom_point(aes(colour="agent"), size=3, stroke=0.1)
+        + geom_point(aes(colour="'Test KL'"), size=3, stroke=0.1)
         + theme(
             axis_title=element_text(size=15),
             axis_text=element_text(size=8),
             figure_size=(12, 4),
+            legend_position="bottom",
+            legend_direction="horizontal"
         )
-        + scale_color_discrete(guide=guide_legend())
-        # + scale_x_discrete(guide=guide_legend())
+        + scale_color_discrete(guide=guide_legend(), name="Legend")
         + xlab("Number of samples")
     )
 
@@ -1938,7 +1940,7 @@ def create_combined_summary_plots(
     results_folder="results",
 ):
 
-    files = glob(results_folder + "/results_*.txt")
+    files = glob(results_folder + "/results_*_kl.txt")
 
     for ids in summary_input_dims:
         plot_summary(files, ids)
@@ -2195,7 +2197,7 @@ def create_ranked_dbnn_plots(
     num_samples=100,
     max_num_samples_lens=27,
     max_num_samples_ens=30,
-    summary_input_dims=[[10, 100, 1000]],
+    summary_input_dims=[[1, 10, 100]],
     agents="all",
     results_folder="results",
     file_filter=None,
