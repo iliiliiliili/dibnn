@@ -281,6 +281,8 @@ class TestbedGPRegression(TestbedProblem):
         greedy: bool = True,
         use_log_likelihood: bool = False,
         verbose: bool = True,
+        initialize_count = 0,
+        with_replacement=False,
     ) -> ENNQuality:
         """Computes KL estimate on mean functions for tau=1 only."""
         # Extract useful quantities from the gp sampler.
@@ -404,7 +406,7 @@ class TestbedGPRegression(TestbedProblem):
             all_sample_sets = []
 
             for i in range(0, len(all_samples)):
-                if i not in best_samples:
+                if (i not in best_samples) or with_replacement:
                     all_sample_sets.append([*best_samples, i])
             
             kl_results, errors_mean, errors_std = evaluate_multiple_sets_kl(all_sample_sets, False)
@@ -418,14 +420,14 @@ class TestbedGPRegression(TestbedProblem):
                 },
             )
 
-            return best_set, best_kl
+            return best_set, best_kl, kl_results
 
         def add_sample_to_best_log_likelihood(best_samples):
 
             all_sample_sets = []
 
             for i in range(0, len(all_samples)):
-                if i not in best_samples:
+                if (i not in best_samples) or with_replacement:
                     all_sample_sets.append([*best_samples, i])
             
             log_likelihoods = evaluate_multiple_sets_log_likelihood_val(all_sample_sets)
@@ -433,26 +435,57 @@ class TestbedGPRegression(TestbedProblem):
             best_set = all_sample_sets[best_samples_id]
             best_log_likelihood = log_likelihoods[best_samples_id].item()
 
-            return best_set, best_log_likelihood
+            return best_set, best_log_likelihood, log_likelihoods
 
         def greedy_search():
 
             best_samples = []
 
-            for num_samples in range(1, len(all_samples) + 1):
+            if initialize_count > 0:
+                if use_log_likelihood:
+                    best_samples, best_val_log_likelihood, val_log_likelihoods = add_sample_to_best_log_likelihood(best_samples)
+                    initial_sample_order = torch.argsort(-val_log_likelihoods).tolist()
+                else:
+                    best_samples, best_val_kl, val_kl_results = add_sample_to_best_kl(best_samples)
+                    initial_sample_order = torch.argsort(val_kl_results).tolist()
+
+                best_samples = initial_sample_order[:initialize_count]
+
+            for num_samples in range(2, len(best_samples) + 1):
+                best_kl = evaluate_single_set_kl([*best_samples[:num_samples]], True)
+
+                if verbose:
+                    if use_log_likelihood:
+                        print("++", len(best_samples[:num_samples]), "kl", best_kl.kl_estimate, "val_ll", val_log_likelihoods[initial_sample_order[:num_samples]].mean().item(), flush=True)
+                    else:
+                        print("--", len(best_samples[:num_samples]), "kl", best_kl.kl_estimate, "val_kl", val_kl_results[initial_sample_order[:num_samples]].mean().item(), flush=True)
+
+                results[num_samples] = {
+                    "best_samples": best_samples[:num_samples],
+                    "best_kl": best_kl,
+                }
 
                 if use_log_likelihood:
-                    best_samples, best_val_log_likelihood = add_sample_to_best_log_likelihood(best_samples)
+                    best_val_log_likelihood = evaluate_multiple_sets_log_likelihood_val([best_samples[:num_samples]])
+                    results[num_samples]["best_val_log_likelihood"] = best_val_log_likelihood.item()
                 else:
-                    best_samples, best_val_kl = add_sample_to_best_kl(best_samples)
+                    best_val_kl = evaluate_single_set_kl([best_samples[:num_samples]], False)
+                    results[num_samples]["best_val_kl"] = best_val_kl.item()
+
+            for num_samples in range(len(best_samples) + 1, len(all_samples) + 1 + (len(all_samples) if with_replacement else 0)):
+
+                if use_log_likelihood:
+                    best_samples, best_val_log_likelihood, val_log_likelihoods = add_sample_to_best_log_likelihood(best_samples)
+                else:
+                    best_samples, best_val_kl, val_kl_results = add_sample_to_best_kl(best_samples)
 
                 best_kl = evaluate_single_set_kl([*best_samples], True)
 
                 if verbose:
                     if use_log_likelihood:
-                        print("++", len(best_samples), "kl", best_kl.kl_estimate, "val_ll", best_val_log_likelihood)
+                        print("++", len(best_samples), "kl", best_kl.kl_estimate, "val_ll", best_val_log_likelihood, flush=True)
                     else:
-                        print("--", len(best_samples), "kl", best_kl.kl_estimate, "val_kl", best_val_kl.kl_estimate)
+                        print("--", len(best_samples), "kl", best_kl.kl_estimate, "val_kl", best_val_kl.kl_estimate, flush=True)
 
                 if num_samples > 1:
 

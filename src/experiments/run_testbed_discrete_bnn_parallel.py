@@ -45,6 +45,9 @@ def single_run(
     use_double_precision,
     reduce_batch,
     test_random_set_count,
+    initialize_count_kl,
+    initialize_count_ll,
+    with_replacement,
     device,
 ):
 
@@ -86,7 +89,6 @@ def single_run(
             return result
             
         enn_sampler_free = fixed_sampler
-
 
     if agent_config.settings["agent"] in ["layer_ensembles", "ensemble"]:
         # mns_list = [agent_config.settings["max_num_samples"]]
@@ -159,7 +161,8 @@ def single_run(
         all_indices = agent.create_all_indices(max_samples, seed=all_indices_seed, device=device)
 
         best_samples_kl = problem.find_best_samples(
-            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=False, verbose=False
+            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device,
+            use_log_likelihood=False, verbose=False, initialize_count=initialize_count_kl, with_replacement=with_replacement
         )
         
         with open(
@@ -215,7 +218,8 @@ def single_run(
                 )
 
         best_samples_ll = problem.find_best_samples(
-            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True
+            enn_sampler_fixed, all_indices, seed=best_samples_seed, noise_std=ns, device=device, use_log_likelihood=True,
+            initialize_count=initialize_count_ll, verbose=False, with_replacement=with_replacement
         )
 
         with open(
@@ -505,7 +509,7 @@ def main(
     data_ratio=(1.0, 10.0, 100.0),
     noise_std=(0.01, 0.1, 1.0),
     seeds=(2605, 26, 0, 5),
-    max_num_samples=(10, 100, 1000),
+    max_num_samples=(100, 1000),
     agent_id_start=0,
     agent_id_end=-1,
     agent_name="all",
@@ -518,6 +522,9 @@ def main(
     reduce_batch_dims=[],
     lens_max_num_samples=[27],
     test_random_set_count=5,
+    initialize_count_kl=0,
+    initialize_count_ll=0,
+    with_replacement=False,
 ):
     """Run testbed sweep.
 
@@ -629,6 +636,9 @@ def main(
                             use_double_precision,
                             reduce_batch,
                             test_random_set_count,
+                            initialize_count_kl,
+                            initialize_count_ll,
+                            with_replacement
                         )
 
                         to_add = []
@@ -667,27 +677,27 @@ def main(
     else:
         print("No experiments to run.")
 
-        max_agent_id = (
-            agent_id_end
-            if agent_id_end != -1
-            else len(agent_factories.load_agent_config_sweep(agent_name))
-        )
+    max_agent_id = (
+        agent_id_end
+        if agent_id_end != -1
+        else len(agent_factories.load_agent_config_sweep(agent_name))
+    )
 
-        combine_results(
-            experiment_group,
-            seeds,
-            agent_name,
-            input_dim,
-            data_ratio,
-            noise_std,
-            max_num_samples,
-            agent_id_start,
-            max_agent_id,
-            results_folder,
-            no_file_ok=single_mns_per_experiment
-        )
+    combine_results(
+        experiment_group,
+        seeds,
+        agent_name,
+        input_dim,
+        data_ratio,
+        noise_std,
+        max_num_samples,
+        agent_id_start,
+        max_agent_id,
+        results_folder,
+        no_file_ok=single_mns_per_experiment
+    )
 
-        print("Combined results")
+    print("Combined results")
 
 if __name__ == "__main__":
     fire.Fire(main)

@@ -2534,7 +2534,7 @@ def create_ranked_discrete_model_data(
 
         if is_randomset:
 
-            random_kl_of_calibrated_samples = [f[params["y"]].values[idx - min_indexer] for f, idx in zip(frames, best_indexers_by_val)]
+            random_kl_of_calibrated_samples = [f[params["y"]].values[min(idx - min_indexer, len(f[params["y"]].values) - 1)] for f, idx in zip(frames, best_indexers_by_val)]
             mean_random_kl_of_calibrated_samples = sum(random_kl_of_calibrated_samples) / len(random_kl_of_calibrated_samples)
             median_random_kl_of_calibrated_samples = np.median(random_kl_of_calibrated_samples)
             var_random_kl_of_calibrated_samples = sum((y - mean_random_kl_of_calibrated_samples) ** 2 for y in random_kl_of_calibrated_samples) / len(random_kl_of_calibrated_samples)

@@ -873,6 +873,7 @@ def make_layer_ensembles_best_sweep(reduce_batch=False) -> List[AgentCtorConfig]
     # Adding reasonably interesting ensemble agents
     # for num_ensemble in [2, 3]:
     for num_ensemble, inference_samples in [
+        (5, ["full"]),
         (3, ["full"]),
     ]:
         for noise_scale in [1]:
