@@ -17,7 +17,8 @@ tex/*
 
 *.sh
 !run_example.sh
-]!install.sh
+!install.sh
+!run_experiments_dbnn.sh
 !requirements.txt
 screenlog.*
 results
